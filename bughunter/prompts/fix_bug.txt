@@ -47,11 +47,11 @@ PATCH_READY
 --- a/src/main.c
 +++ b/src/main.c
 @@ -15,7 +15,7 @@
- int main() {
+ int main() {{
      printf("Hello, World!\n");
 -    return 1;
 +    return 0;
- }
+ }}
 ```
 
 Please start by providing a bash command to explore the repository structure.
