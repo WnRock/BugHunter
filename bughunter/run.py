@@ -6,20 +6,21 @@ import os
 import sys
 import yaml
 import json
+import time
 import logging
-import argparse
-from typing import List, Dict, Any
+from typing import Dict, Any, List
+from bughunter.config.manager import config_manager
 from bughunter.tasks.fix_bug_task import FixBugTask
 from bughunter.utils.setup import main as setup_main
 from bughunter.tasks.locate_bug_task import LocateBugTask
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from bughunter.evaluation import run_evaluation, run_patch_evaluation
 from bughunter.tasks.fix_with_location_task import FixWithLocationTask
-from bughunter.core.models import TestInstance, TaskResult, AgentConfig, TaskType
+from bughunter.config.utils import create_argument_parser, handle_overrides
+from bughunter.core.models import TestInstance, TaskResult, TaskType, AgentConfig
 from bughunter.utils.output_manager import (
-    save_fixed_output_files,
     save_instance_result_files,
     save_trajectory_file,
+    save_fixed_output_files,
 )
 
 
@@ -51,18 +52,9 @@ class IssueSolvingPipeline:
         return task.execute(test_instance)
 
 
-def load_config(config_file: str = "config.yaml") -> Dict[str, Any]:
-    """Load configuration from YAML file"""
-    if not os.path.isabs(config_file):
-        config_file = os.path.join(os.path.dirname(__file__), "..", config_file)
-
-    with open(config_file, "r") as f:
-        return yaml.safe_load(f)
-
-
-def load_test_data(config: Dict[str, Any]) -> List[TestInstance]:
+def load_test_data() -> List[TestInstance]:
     """Load test instances from YAML file specified in config"""
-    yaml_file = config["tasks"]["test_data_file"]
+    yaml_file = config_manager.get("tasks.test_data_file")
 
     # Adjust path to be relative to project root
     if not os.path.isabs(yaml_file):
@@ -75,14 +67,14 @@ def load_test_data(config: Dict[str, Any]) -> List[TestInstance]:
 
     # Use task type from config with validation
     try:
-        task_type = TaskType(config["tasks"]["task_type"])
+        task_type = TaskType(config_manager.get("tasks.task_type"))
     except ValueError as e:
         raise ValueError(
-            f"Invalid task_type in config: {config['tasks']['task_type']}. Must be one of: {[t.value for t in TaskType]}"
+            f'Invalid task_type in config: {config_manager.get("tasks.task_type")}. Must be one of: {[t.value for t in TaskType]}'
         )
 
     # Optional instance filtering from config
-    target_instances = config["tasks"].get("target_instances", None)
+    target_instances = config_manager.get("tasks.target_instances")
 
     for item in data:
         # Skip if target_instances is specified and this instance is not in the list
@@ -110,19 +102,43 @@ def load_test_data(config: Dict[str, Any]) -> List[TestInstance]:
     return instances
 
 
-def setup_logging(config: Dict[str, Any]):
+def setup_logging():
     """Setup logging configuration from config"""
-    log_level = config["system"]["log_level"]
+    log_level = config_manager.get("system.log_level", "INFO")
 
-    # Note: Removed automatic logs directory creation - logs will be handled per test case
-    # Just use console logging for the main pipeline
-    logging.basicConfig(
-        level=getattr(logging, log_level.upper()),
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-        ],
+    # Get output directory for log files
+    base_output_dir = config_manager.get("output.output_dir")
+    if base_output_dir is None:
+        base_output_dir = os.getcwd()
+    elif not os.path.isabs(base_output_dir):
+        base_output_dir = os.path.abspath(base_output_dir)
+
+    # Create output directory if it doesn't exist
+    os.makedirs(base_output_dir, exist_ok=True)
+
+    # Setup main pipeline logger with both console and file output
+    logger = logging.getLogger()
+    logger.setLevel(getattr(logging, log_level.upper()))
+    logger.handlers.clear()
+
+    # Console handler with colored output
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    console_handler.setFormatter(console_formatter)
+    console_handler.setLevel(getattr(logging, log_level.upper()))
+    logger.addHandler(console_handler)
+
+    # File handler for main pipeline log
+    main_log_file = os.path.join(base_output_dir, "bughunter_pipeline.log")
+    file_handler = logging.FileHandler(
+        main_log_file, mode="w"
+    )  # Overwrite previous log
+    file_formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
+    file_handler.setFormatter(file_formatter)
+    file_handler.setLevel(getattr(logging, log_level.upper()))
+    logger.addHandler(file_handler)
 
 
 def convert_result_to_dict(result: TaskResult) -> Dict[str, Any]:
@@ -143,20 +159,99 @@ def convert_result_to_dict(result: TaskResult) -> Dict[str, Any]:
     return result_dict
 
 
-def run_setup_if_needed(config_file_path):
-    """Run setup automatically before main execution"""
+def create_trajectory_summary(trajectory_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a summary of trajectory for performance optimization"""
+    return {
+        "environment": trajectory_dict["environment"],
+        "steps_count": len(trajectory_dict["trajectory"]),
+        "history_count": len(trajectory_dict["history"]),
+        "exit_status": (
+            trajectory_dict["info"]["exit_status"]
+            if trajectory_dict["info"]
+            else "unknown"
+        ),
+    }
+
+
+def create_error_result(
+    instance_id: str, task_type: TaskType, error_msg: str
+) -> Dict[str, Any]:
+    """Create a standardized error result dictionary"""
+    return {
+        "success": False,
+        "instance_id": instance_id,
+        "task_type": task_type.value,
+        "iterations": 0,
+        "result_data": {},
+        "error": error_msg,
+    }
+
+
+def process_result_for_output(result_dict: Dict[str, Any]) -> Dict[str, Any]:
+    """Process result dictionary for output, replacing full trajectory with summary"""
+    if "trajectory" in result_dict:
+        result_dict["trajectory_summary"] = create_trajectory_summary(
+            result_dict["trajectory"]
+        )
+        del result_dict["trajectory"]
+    return result_dict
+
+
+def process_single_instance(
+    test_instance: TestInstance, pipeline: IssueSolvingPipeline, output_dir: str
+) -> Dict[str, Any]:
+    """Process a single test instance and return result dictionary"""
+    logging.info(
+        f"Processing {test_instance.task_type.value} task: {test_instance.instance_id}"
+    )
+
     try:
-        print("🔧 Running automatic setup check...")
-        setup_main(config_file_path)
-        print("✅ Setup check completed successfully\n")
-    except SystemExit as e:
-        if e.code != 0:
-            print("❌ Setup failed. Please run 'python main.py setup' first.")
-            sys.exit(1)
+        result = pipeline.solve_issue(test_instance)
+
+        # Save instance-specific result files
+        save_instance_result_files(result, output_dir)
+        save_trajectory_file(result, output_dir)
+
+        # Convert result and process for output
+        result_dict = convert_result_to_dict(result)
+        return process_result_for_output(result_dict)
+
     except Exception as e:
-        print(f"❌ Setup error: {e}")
-        print("Please run 'python main.py setup' first.")
-        sys.exit(1)
+        logging.error(f"Error processing instance {test_instance.instance_id}: {e}")
+        return create_error_result(
+            test_instance.instance_id, test_instance.task_type, str(e)
+        )
+
+
+def save_intermediate_results(results: List[Dict[str, Any]], output_path: str):
+    """Save intermediate results to file"""
+    with open(output_path, "w") as f:
+        json.dump(results, f, indent=2)
+
+
+def print_results_summary(results: List[Dict[str, Any]], output_dir: str):
+    """Print summary of results"""
+    successful = len([r for r in results if r["success"]])
+    total = len(results)
+
+    # Task type breakdown
+    task_summary = {}
+    for result in results:
+        task_type = result["task_type"]
+        if task_type not in task_summary:
+            task_summary[task_type] = {"total": 0, "successful": 0}
+        task_summary[task_type]["total"] += 1
+        if result["success"]:
+            task_summary[task_type]["successful"] += 1
+
+    logging.info(f"Overall: {successful}/{total} tasks completed successfully")
+    for task_type, stats in task_summary.items():
+        logging.info(f"{task_type}: {stats['successful']}/{stats['total']} successful")
+
+    logging.info(
+        f"Instance-specific result files saved under: {output_dir}/<instance_id>/"
+    )
+    logging.info(f"Trajectories saved in individual instance directories")
 
 
 # Worker function for multiprocessing
@@ -167,162 +262,72 @@ def worker_process_instance(args):
     """
     test_instance, agent_config, prompts_config, model_config, output_dir = args
 
-    # Set up logging for this worker process
-    logging.basicConfig(
-        level=logging.INFO,
-        format=f"[Worker-{test_instance.instance_id}] %(asctime)s - %(levelname)s - %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
+    worker_logger = logging.getLogger(f"worker_{test_instance.instance_id}")
+    worker_logger.setLevel(logging.INFO)
+
+    # Create a handler that writes to both stdout and a file
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setFormatter(
+        logging.Formatter(
+            f"[Worker-{test_instance.instance_id}] %(asctime)s - %(levelname)s - %(message)s"
+        )
     )
+    worker_logger.addHandler(console_handler)
+
+    # Also log to a worker-specific file
+    instance_output_dir = os.path.join(output_dir, test_instance.instance_id)
+    os.makedirs(instance_output_dir, exist_ok=True)
+    run_log_filename = config_manager.get("output.run_log", "run.log")
+    worker_log_file = os.path.join(instance_output_dir, run_log_filename)
+    file_handler = logging.FileHandler(worker_log_file)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+    )
+    worker_logger.addHandler(file_handler)
+
+    worker_logger.info(f"🔧 Worker started for instance: {test_instance.instance_id}")
+    start_time = time.time()
 
     try:
         # Create a new pipeline instance for this worker
         pipeline = IssueSolvingPipeline(agent_config, prompts_config, model_config)
 
-        logging.info(
-            f"Processing {test_instance.task_type.value} task: {test_instance.instance_id}"
-        )
-        result = pipeline.solve_issue(test_instance)
+        worker_logger.info(f"📋 Processing {test_instance.task_type.value} task...")
+        result = process_single_instance(test_instance, pipeline, output_dir)
 
-        # Save instance-specific result files (for batch functionality)
-        save_instance_result_files(result, output_dir)
+        elapsed_time = time.time() - start_time
+        status = "✅ SUCCESS" if result["success"] else "❌ FAILED"
+        worker_logger.info(f"🏁 {status} - Completed in {elapsed_time:.1f}s")
 
-        # Save trajectory to separate file (always enabled by default)
-        save_trajectory_file(result, output_dir)
+        return result
 
-        return convert_result_to_dict(result)
     except Exception as e:
-        logging.error(f"Error processing instance {test_instance.instance_id}: {e}")
-        # Return a failed result
-        return {
-            "success": False,
-            "instance_id": test_instance.instance_id,
-            "task_type": test_instance.task_type.value,
-            "iterations": 0,
-            "result_data": {},
-            "error": str(e),
-        }
-
-
-def main():
-    parser = argparse.ArgumentParser(description="Agent-based Issue Solving System")
-    subparsers = parser.add_subparsers(
-        dest="command", help="Available commands", required=True
-    )
-
-    # Setup subcommand
-    setup_parser = subparsers.add_parser(
-        "setup", help="Run initial setup and validation"
-    )
-    setup_parser.add_argument("--config", help="Path to config file (optional)")
-
-    # Run command
-    run_parser = subparsers.add_parser("run", help="Run the bug solving pipeline")
-    run_parser.add_argument(
-        "--config", default="config.yaml", help="Path to config file"
-    )
-
-    # Evaluate subcommand (for locate_bug results)
-    eval_parser = subparsers.add_parser(
-        "evaluate", help="Evaluate locate_bug results against gold truth"
-    )
-    eval_parser.add_argument(
-        "results", help="Path to results.json file with LLM outputs"
-    )
-    eval_parser.add_argument(
-        "--test-data", help="Path to test_set.yaml file (default: data/test_set.yaml)"
-    )
-    eval_parser.add_argument(
-        "--output", help="Path to save detailed evaluation results (JSON format)"
-    )
-    eval_parser.add_argument(
-        "--detailed",
-        action="store_true",
-        help="Show detailed results for each instance",
-    )
-
-    # Evaluate patch subcommand (for fix_bug results)
-    eval_patch_parser = subparsers.add_parser(
-        "evaluate-patch", help="Evaluate fix patch results by running tests in Docker"
-    )
-    eval_patch_parser.add_argument(
-        "results", help="Path to results.json file containing patches"
-    )
-    eval_patch_parser.add_argument(
-        "--output", help="Path to save detailed evaluation results (JSON format)"
-    )
-    eval_patch_parser.add_argument(
-        "--detailed",
-        action="store_true",
-        help="Show detailed results for each instance",
-    )
-
-    args = parser.parse_args()
-
-    # Handle setup command
-    if args.command == "setup":
-        project_root = os.path.join(os.path.dirname(__file__), "..")
-        original_cwd = os.getcwd()
-        os.chdir(project_root)
-        try:
-            setup_main(args.config)
-        finally:
-            os.chdir(original_cwd)
-        return
-
-    # Handle evaluate command (locate_bug)
-    if args.command == "evaluate":
-        # Setup basic logging for evaluation
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s - %(levelname)s - %(message)s",
-            handlers=[logging.StreamHandler(sys.stdout)],
+        elapsed_time = time.time() - start_time
+        worker_logger.error(f"❌ FAILED after {elapsed_time:.1f}s: {e}")
+        return create_error_result(
+            test_instance.instance_id, test_instance.task_type, str(e)
         )
-        run_evaluation(args)
-        return
 
-    # Handle evaluate-patch command (fix_bug)
-    if args.command == "evaluate-patch":
-        # Setup basic logging for patch evaluation
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s - %(levelname)s - %(message)s",
-            handlers=[logging.StreamHandler(sys.stdout)],
-        )
-        run_patch_evaluation(args)
-        return
 
-    # Handle run command - automatically run setup first
-    try:
-        config = load_config(args.config)
-    except Exception as e:
-        logging.error(f"Failed to load config: {e}")
-        sys.exit(1)
+def run_pipeline():
+    """Run the BugHunter pipeline with given parameters"""
+    config = config_manager.get_config()
 
-    # Run setup check before main execution
-    project_root = os.path.join(os.path.dirname(__file__), "..")
-    original_cwd = os.getcwd()
-    os.chdir(project_root)
-    try:
-        run_setup_if_needed(args.config)
-    finally:
-        os.chdir(original_cwd)
-
-    setup_logging(config)
-
-    if not os.getenv("OPENAI_API_KEY"):
-        logging.error("OPENAI_API_KEY environment variable is required")
-        sys.exit(1)
+    setup_main()
 
     # Load test data
     try:
-        test_instances = load_test_data(config)
+        test_instances = load_test_data()
         logging.info(f"Loaded {len(test_instances)} test instances")
+        for instance in test_instances:
+            logging.info(f"  - {instance.instance_id} ({instance.task_type.value})")
     except Exception as e:
         logging.error(f"Failed to load test data: {e}")
         sys.exit(1)
 
     # Initialize pipeline from config
     model_config = config["model"]
+    logging.info(f"Using model: {model_config['name']}")
 
     # Handle environment variable substitution for api_key
     api_key = model_config["api_key"]
@@ -334,6 +339,7 @@ def main():
                 f"Environment variable {env_var_name} is required but not set"
             )
             sys.exit(1)
+        logging.info(f"Using API key from environment variable: {env_var_name}")
 
     agent_config = AgentConfig(
         model_name=model_config["name"],
@@ -341,6 +347,10 @@ def main():
         max_tokens=model_config["generation"]["max_tokens"],
         max_iterations=config["system"]["max_iterations"],
     )
+    logging.info(
+        f"Agent config: max_iterations={agent_config.max_iterations}, temperature={agent_config.temperature}"
+    )
+
     prompts_config = config.get("prompts", {})
     pipeline = IssueSolvingPipeline(agent_config, prompts_config, model_config)
 
@@ -370,10 +380,11 @@ def main():
 
     # Solve issues - use parallel or sequential processing based on num_workers
     results = []
+    start_time = time.time()
 
     if num_workers > 1 and len(test_instances) > 1:
         logging.info(
-            f"Using parallel processing with {num_workers} workers for {len(test_instances)} instances"
+            f"🚀 Starting parallel processing with {num_workers} workers for {len(test_instances)} instances"
         )
 
         # Prepare arguments for worker processes
@@ -390,118 +401,149 @@ def main():
                 for args in worker_args
             }
 
+            completed_count = 0
+            total_count = len(test_instances)
+
             # Process results as they complete
             for future in as_completed(future_to_instance):
                 test_instance = future_to_instance[future]
+                completed_count += 1
+
                 try:
                     result_dict = future.result()
-
-                    # Include only trajectory summary in main results for performance
-                    if "trajectory" in result_dict:
-                        trajectory_summary = {
-                            "environment": result_dict["trajectory"]["environment"],
-                            "steps_count": len(result_dict["trajectory"]["trajectory"]),
-                            "history_count": len(result_dict["trajectory"]["history"]),
-                            "exit_status": (
-                                result_dict["trajectory"]["info"]["exit_status"]
-                                if result_dict["trajectory"]["info"]
-                                else "unknown"
-                            ),
-                        }
-                        result_dict["trajectory_summary"] = trajectory_summary
-                        del result_dict["trajectory"]
-
                     results.append(result_dict)
 
-                    # Save intermediate results
-                    with open(output_path, "w") as f:
-                        json.dump(results, f, indent=2)
+                    status = "✅ SUCCESS" if result_dict["success"] else "❌ FAILED"
+                    logging.info(
+                        f"[{completed_count}/{total_count}] {status} - {test_instance.instance_id}"
+                    )
+
+                    save_intermediate_results(results, output_path)
 
                 except Exception as e:
                     logging.error(
-                        f"Error processing instance {test_instance.instance_id}: {e}"
+                        f"[{completed_count}/{total_count}] ❌ FAILED - {test_instance.instance_id}: {e}"
                     )
-                    # Add failed result
-                    results.append(
-                        {
-                            "success": False,
-                            "instance_id": test_instance.instance_id,
-                            "task_type": test_instance.task_type.value,
-                            "iterations": 0,
-                            "result_data": {},
-                            "error": str(e),
-                        }
+                    error_result = create_error_result(
+                        test_instance.instance_id, test_instance.task_type, str(e)
                     )
+                    results.append(error_result)
+
+                # Log progress update
+                elapsed_time = time.time() - start_time
+                avg_time_per_task = elapsed_time / completed_count
+                estimated_remaining = avg_time_per_task * (
+                    total_count - completed_count
+                )
+
+                logging.info(
+                    f"Progress: {completed_count}/{total_count} completed "
+                    f"(elapsed: {elapsed_time:.1f}s, est. remaining: {estimated_remaining:.1f}s)"
+                )
     else:
-        # Sequential processing (original logic)
+        # Sequential processing
         if num_workers > 1:
-            logging.info("Only one instance to process, using sequential processing")
+            logging.info("📝 Only one instance to process, using sequential processing")
         else:
             logging.info(
-                f"Using sequential processing for {len(test_instances)} instances"
+                f"📝 Starting sequential processing for {len(test_instances)} instances"
             )
 
-        for test_instance in test_instances:
+        for i, test_instance in enumerate(test_instances, 1):
             logging.info(
-                f"Processing {test_instance.task_type.value} task: {test_instance.instance_id}"
+                f"[{i}/{len(test_instances)}] Starting: {test_instance.instance_id}"
             )
-            result = pipeline.solve_issue(test_instance)
 
-            # Save instance-specific result files (for batch functionality)
-            save_instance_result_files(result, output_dir)
-
-            # Save trajectory to separate file (always enabled by default)
-            save_trajectory_file(result, output_dir)
-
-            # Convert result for JSON output
-            result_dict = convert_result_to_dict(result)
-            # Include only trajectory summary in main results for performance
-            if "trajectory" in result_dict:
-                trajectory_summary = {
-                    "environment": result_dict["trajectory"]["environment"],
-                    "steps_count": len(result_dict["trajectory"]["trajectory"]),
-                    "history_count": len(result_dict["trajectory"]["history"]),
-                    "exit_status": (
-                        result_dict["trajectory"]["info"]["exit_status"]
-                        if result_dict["trajectory"]["info"]
-                        else "unknown"
-                    ),
-                }
-                result_dict["trajectory_summary"] = trajectory_summary
-                del result_dict["trajectory"]
-
+            result_dict = process_single_instance(test_instance, pipeline, output_dir)
             results.append(result_dict)
 
-            # Save intermediate results
-            with open(output_path, "w") as f:
-                json.dump(results, f, indent=2)
+            status = "✅ SUCCESS" if result_dict["success"] else "❌ FAILED"
+            logging.info(
+                f"[{i}/{len(test_instances)}] {status} - {test_instance.instance_id}"
+            )
+
+            save_intermediate_results(results, output_path)
+
+            # Log progress for sequential processing
+            elapsed_time = time.time() - start_time
+            if i < len(test_instances):
+                avg_time_per_task = elapsed_time / i
+                estimated_remaining = avg_time_per_task * (len(test_instances) - i)
+                logging.info(
+                    f"Progress: {i}/{len(test_instances)} completed "
+                    f"(elapsed: {elapsed_time:.1f}s, est. remaining: {estimated_remaining:.1f}s)"
+                )
+
+    # Final timing and summary
+    total_time = time.time() - start_time
+    logging.info(f"🏁 Pipeline completed in {total_time:.1f} seconds")
 
     # Print summary
-    successful = len([r for r in results if r["success"]])
-    total = len(results)
-
-    # Task type breakdown
-    task_summary = {}
-    for result in results:
-        task_type = result["task_type"]
-        if task_type not in task_summary:
-            task_summary[task_type] = {"total": 0, "successful": 0}
-        task_summary[task_type]["total"] += 1
-        if result["success"]:
-            task_summary[task_type]["successful"] += 1
-
-    logging.info(f"Overall: {successful}/{total} tasks completed successfully")
-    for task_type, stats in task_summary.items():
-        logging.info(f"{task_type}: {stats['successful']}/{stats['total']} successful")
-
-    logging.info(
-        f"Instance-specific result files saved under: {output_dir}/<instance_id>/"
-    )
-
-    logging.info(f"Trajectories saved in individual instance directories")
+    print_results_summary(results, output_dir)
 
     # Save fixed output files for testing
     try:
         save_fixed_output_files(results, output_dir, config)
+        logging.info("📁 Fixed output files saved successfully")
     except Exception as e:
         logging.error(f"Failed to save fixed output files: {e}")
+
+
+def main():
+    """Main entry point for the BugHunter application with subcommands"""
+    parser = create_argument_parser()
+    args, unknown_args = parser.parse_known_args()
+
+    config_path = getattr(args, "config", None)
+    if config_path:
+        config_manager.load_config(config_path)
+    else:
+        config_manager.load_config()
+    handle_overrides(unknown_args)
+
+    setup_logging()
+    logging.info("Starting BugHunter pipeline")
+
+    # If no command is provided, show help
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        if args.command == "run":
+            # Call the run pipeline function directly with parameters
+            run_pipeline()
+
+        elif args.command == "setup":
+            # Run setup
+            print(f"🚀 Running BugHunter setup with config: {args.config}")
+            setup_main()
+
+        elif args.command == "evaluate":
+            if not args.eval_type:
+                parser.error("evaluate command requires a type (patch or location)")
+
+            if args.eval_type == "patch":
+                print(f"📊 Evaluating patch results from: {args.results}")
+                from bughunter.evaluation.patch_evaluation import run_patch_evaluation
+
+                run_patch_evaluation(args)
+
+            elif args.eval_type == "location":
+                print(f"📊 Evaluating location results from: {args.results}")
+                from bughunter.evaluation.location_evaluation import run_evaluation
+
+                run_evaluation(args)
+
+            else:
+                parser.error(f"Unknown evaluation type: {args.eval_type}")
+
+        else:
+            parser.error(f"Unknown command: {args.command}")
+
+    except KeyboardInterrupt:
+        print("\n❌ Operation cancelled by user")
+        sys.exit(1)
+    except Exception as e:
+        logging.error(f"❌ Error: {e}")
+        sys.exit(1)

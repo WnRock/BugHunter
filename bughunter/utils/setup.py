@@ -9,6 +9,7 @@ import yaml
 import subprocess
 from pathlib import Path
 from dotenv import load_dotenv
+from bughunter.config.manager import config_manager
 
 
 def check_python_version():
@@ -99,23 +100,18 @@ def setup_env_file():
         return False
 
 
-def validate_config(config_file_path=None):
+def validate_config():
     """Validate configuration file"""
-    config_file = Path(config_file_path) if config_file_path else Path("config.yaml")
-
-    if not config_file.exists():
-        print(f"❌ {config_file} not found")
-        return False
-
     try:
-        with open(config_file) as f:
-            config = yaml.safe_load(f)
+        config = config_manager.get_config()
 
         # Basic validation
         required_sections = ["system", "model", "docker", "output", "tasks"]
         for section in required_sections:
             if section not in config:
-                print(f"❌ Missing section '{section}' in {config_file}")
+                print(
+                    f"❌ Missing section '{section}' in {config_manager._config_file_path}"
+                )
                 return False
 
         # Validate system settings
@@ -167,10 +163,10 @@ def validate_config(config_file_path=None):
                 print(f"❌ prompts.{prompt_type} is required")
                 return False
 
-        print(f"✅ {config_file} is valid")
+        print(f"✅ {config_manager._config_file_path} is valid")
         return True
     except yaml.YAMLError as e:
-        print(f"❌ Invalid YAML in {config_file}: {e}")
+        print(f"❌ Invalid YAML in {config_manager._config_file_path}: {e}")
         return False
 
 
@@ -290,41 +286,28 @@ def validate_environment_variables():
     return True
 
 
-def validate_prompt_files(config_file_path=None):
+def validate_prompt_files():
     """Validate that prompt files exist and are readable"""
     try:
-        # Load config to get prompts configuration
-        config_file = (
-            Path(config_file_path) if config_file_path else Path("config.yaml")
-        )
-        with open(config_file) as f:
-            config = yaml.safe_load(f)
+        prompts = config_manager.get("prompts")
+        prompt_dir = config_manager.get("prompts.directory")
 
-        prompts_config = config.get("prompts", {})
-        prompt_dir = prompts_config.get("directory", "bughunter/prompts")
-
-        # Check if prompts directory exists
-        if not os.path.isabs(prompt_dir):
-            prompt_dir_path = Path(prompt_dir)
-        else:
-            prompt_dir_path = Path(prompt_dir)
-
-        if not prompt_dir_path.exists():
-            print(f"❌ Prompts directory not found: {prompt_dir_path}")
+        if not Path(prompt_dir).exists():
+            print(f"❌ Prompts directory not found: {prompt_dir}")
             return False
 
         # Check each prompt file
         prompt_files = {
-            "fix_bug": prompts_config.get("fix_bug", "fix_bug.txt"),
-            "locate_bug": prompts_config.get("locate_bug", "locate_bug.txt"),
-            "fix_with_location": prompts_config.get(
+            "fix_bug": prompts.get("fix_bug", "fix_bug.txt"),
+            "locate_bug": prompts.get("locate_bug", "locate_bug.txt"),
+            "fix_with_location": prompts.get(
                 "fix_with_location", "fix_with_location.txt"
             ),
         }
 
         missing_files = []
         for prompt_type, filename in prompt_files.items():
-            file_path = prompt_dir_path / filename
+            file_path = Path(prompt_dir) / filename
             if not file_path.exists():
                 missing_files.append(f"{prompt_type}: {file_path}")
             elif not file_path.is_file():
@@ -349,7 +332,7 @@ def validate_prompt_files(config_file_path=None):
                 print(f"   - {file_info}")
             return False
 
-        print(f"✅ All prompt files are present and readable in {prompt_dir_path}")
+        print(f"✅ All prompt files are present and readable in {prompt_dir}")
         return True
 
     except Exception as e:
@@ -357,34 +340,20 @@ def validate_prompt_files(config_file_path=None):
         return False
 
 
-def create_output_directories(config_file_path=None):
+def create_output_directories():
     """Create necessary output directories based on configuration"""
     try:
-        # Load config to get output directory setting
-        config_file = (
-            Path(config_file_path) if config_file_path else Path("config.yaml")
-        )
+        base_output_dir = config_manager.get("output.output_dir")
 
-        if config_file.exists():
-            with open(config_file) as f:
-                config = yaml.safe_load(f)
-
-            # Get user-configurable output directory from config
-            base_output_dir = config.get("output", {}).get("output_dir")
-
-            if base_output_dir is None:
-                # Default to current working directory if not specified
-                base_output_dir = os.getcwd()
-                print(f"   - Using default output directory: {base_output_dir}")
-            else:
-                # Expand relative paths to absolute paths
-                if not os.path.isabs(base_output_dir):
-                    base_output_dir = os.path.abspath(base_output_dir)
-                print(f"   - Using configured output directory: {base_output_dir}")
-        else:
-            # Fallback if config doesn't exist yet
+        if base_output_dir is None:
+            # Default to current working directory if not specified
             base_output_dir = os.getcwd()
-            print(f"   - Config not found, using current directory: {base_output_dir}")
+            print(f"   - Using default output directory: {base_output_dir}")
+        else:
+            # Expand relative paths to absolute paths
+            if not os.path.isabs(base_output_dir):
+                base_output_dir = os.path.abspath(base_output_dir)
+            print(f"   - Using configured output directory: {base_output_dir}")
 
         # Create the base output directory
         os.makedirs(base_output_dir, exist_ok=True)
@@ -400,7 +369,7 @@ def create_output_directories(config_file_path=None):
         return False
 
 
-def main(config_file_path=None):
+def main():
     """Main setup function"""
     print("🚀 Setting up Agent-based Issue Solving System\n")
 
@@ -409,13 +378,13 @@ def main(config_file_path=None):
         ("Docker Installation", check_docker),
         ("Docker Permissions", check_docker_permissions),
         ("Environment File", setup_env_file),
-        ("Configuration", lambda: validate_config(config_file_path)),
+        ("Configuration", lambda: validate_config()),
         ("Test Data", validate_test_data),
         ("Dependencies", install_dependencies),
         ("Docker Test", test_docker_image),
         ("Environment Variables", validate_environment_variables),
-        ("Prompt Files", lambda: validate_prompt_files(config_file_path)),
-        ("Output Directories", lambda: create_output_directories(config_file_path)),
+        ("Prompt Files", lambda: validate_prompt_files()),
+        ("Output Directories", lambda: create_output_directories()),
     ]
 
     failed_checks = []

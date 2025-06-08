@@ -3,9 +3,9 @@ LLM Agent management for the Agent-based Issue Solving System
 """
 
 import os
-import yaml
 from openai import OpenAI
 from typing import Optional
+from bughunter.config.manager import config_manager
 from bughunter.core.trajectory_recorder import TrajectoryRecorder
 from bughunter.core.models import ExecutionResult, AgentConfig, TaskType, TestInstance
 
@@ -40,14 +40,9 @@ class IssueAgent:
         self.prompts_config = prompts_config or self._load_default_prompts_config()
 
     def _load_default_prompts_config(self) -> dict:
-        """Load prompts configuration from config.yaml"""
+        """Load prompts configuration using global config manager"""
         try:
-            config_path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "config.yaml"
-            )
-            with open(config_path, "r") as f:
-                config = yaml.safe_load(f)
-            return config.get(
+            return config_manager.get(
                 "prompts",
                 {
                     "directory": "bughunter/prompts",
@@ -66,14 +61,9 @@ class IssueAgent:
             }
 
     def _load_default_model_config(self) -> dict:
-        """Load model configuration from config.yaml"""
+        """Load model configuration using global config manager"""
         try:
-            config_path = os.path.join(
-                os.path.dirname(__file__), "..", "..", "config.yaml"
-            )
-            with open(config_path, "r") as f:
-                config = yaml.safe_load(f)
-            return config.get(
+            return config_manager.get(
                 "model",
                 {
                     "name": "DeepSeek-V3",
