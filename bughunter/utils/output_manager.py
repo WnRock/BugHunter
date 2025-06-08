@@ -201,8 +201,8 @@ def save_trajectory_file(result: TaskResult, base_output_dir: str):
     instance_dir = os.path.join(base_output_dir, result.instance_id)
     os.makedirs(instance_dir, exist_ok=True)
 
-    # Save trajectory file in instance directory
-    trajectory_filename = f"{result.task_type.value}_trajectory.json"
+    # Save trajectory file in instance directory with fixed name from config
+    trajectory_filename = "trajectory.json"
     trajectory_path = os.path.join(instance_dir, trajectory_filename)
 
     with open(trajectory_path, "w") as f:
