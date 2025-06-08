@@ -221,7 +221,10 @@ Please provide the next command or your analysis."""
 
         # Prepare location hint from gold_target_file
         location_hint_text = ""
-        if test_instance.gold_target_file:
+        if (
+            test_instance.gold_target_file
+            and test_instance.task_type == TaskType.FIX_WITH_LOCATION
+        ):
             if isinstance(test_instance.gold_target_file, list):
                 # Multiple files
                 files_text = ", ".join(test_instance.gold_target_file)
