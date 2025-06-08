@@ -4,7 +4,7 @@ Core data models for BugHunter
 
 from enum import Enum
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union
 
 
 class TaskType(Enum):
@@ -23,7 +23,7 @@ class TestInstance:
     instance_id: str
     problem_statement: str
     task_type: TaskType = TaskType.FIX_BUG
-    location_hint: Optional[str] = None
+    gold_target_file: Optional[Union[str, List[str]]] = None
 
 
 @dataclass

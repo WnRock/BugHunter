@@ -13,7 +13,12 @@ from bughunter.core.models import TestInstance, TaskResult, AgentConfig
 class BaseTask(ABC):
     """Base class for all task types"""
 
-    def __init__(self, agent_config: AgentConfig, prompts_config: dict = None, model_config: dict = None):
+    def __init__(
+        self,
+        agent_config: AgentConfig,
+        prompts_config: dict = None,
+        model_config: dict = None,
+    ):
         self.agent_config = agent_config
         self.prompts_config = prompts_config
         self.model_config = model_config
@@ -40,7 +45,12 @@ class BaseTask(ABC):
         )
 
         # Initialize agent with trajectory recorder, prompts config, and model config
-        self.agent = IssueAgent(self.agent_config, self.trajectory_recorder, self.prompts_config, self.model_config)
+        self.agent = IssueAgent(
+            self.agent_config,
+            self.trajectory_recorder,
+            self.prompts_config,
+            self.model_config,
+        )
 
         # Start container
         if not self.docker_manager.start_container(test_instance.image_name):
@@ -55,12 +65,7 @@ class BaseTask(ABC):
 
         try:
             # Initialize conversation
-            agent_response = self.agent.initialize_conversation(
-                test_instance.problem_statement,
-                test_instance.instance_id,
-                test_instance.task_type,
-                test_instance.location_hint,
-            )
+            agent_response = self.agent.initialize_conversation(test_instance)
 
             iteration = 0
             while iteration < self.agent_config.max_iterations:

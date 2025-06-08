@@ -1,5 +1,6 @@
 - image_name: dongqa930/dunst-project_dunst:1215
   instance_id: dunst_project_dunst_1215
+  gold_target_file: src/utils.c
   problem_statement: "Can't set default_icon path with environment variable ($HOME\
     \ or ~)\n### Issue description\r\n\r\nThe `default_icon` path cannot use the `$HOME`\
     \ or `~` environment variables. The full path must be specified to for it to work.\
@@ -30,6 +31,7 @@
     \n\n"
 - image_name: dongqa930/dunst-project_dunst:914
   instance_id: dunst_project_dunst_914
+  gold_target_file: src/utils.c
   problem_statement: "Opening angle bracket \"<\" breaks rendering\n`notify-send \
     \ \"title\"  \"We <3 dunst\"` shows up as:  \r\n\r\n![image](https://user-images.githubusercontent.com/1058151/132224981-c97cc72d-fefd-4264-bbf9-b413a85de8fb.png)\r\
     \n\r\n`notify-send  \"title\"  \"We <3> dunst\"`:  \r\n\r\n![image](https://user-images.githubusercontent.com/1058151/132225032-4c4525ea-b4a1-408c-a2a0-104530fe368e.png)\r\
@@ -40,6 +42,7 @@
     \ type: `manual`\r\n- Distro and version: `Xubuntu 18.04+i3-gaps `\r\n\n"
 - image_name: dongqa930/redis_hiredis:427
   instance_id: redis_hiredis_427
+  gold_target_file: hiredis.c
   problem_statement: 'Typo format in redisFormatSdsCommandArgv function
 
     this issue is very significant, because not allow the proper execution of the
@@ -51,6 +54,10 @@
     '
 - image_name: dongqa930/redis_hiredis:819
   instance_id: redis_hiredis_819
+  gold_target_file:
+    - hiredis.c
+    - async.c
+    - read.c
   problem_statement: "Asynchronous PSUBSCRIBE command fails when using RESP3\nThe\
     \ following toy implementation shows how execution of asynchronous `PSUBSCRIBE`\
     \ command using current `RESP3` support in master (i.e. https://github.com/redis/hiredis/pull/805\
@@ -92,6 +99,7 @@
     \n    }\r\n}\r\n```\n"
 - image_name: dongqa930/redis_hiredis:1215
   instance_id: redis_hiredis_1215
+  gold_target_file: net.c
   problem_statement: "Improvement: More specific error message when calling redisEnableKeepAlive()\
     \ with unix socket\nUnix sockets don't support setsockopt `TCP_KEEPALIVE` and\
     \ currently the error message is set to `strerror(errno)`: \"Operation not supported\"\
@@ -108,6 +116,7 @@
     \ do you think?\n"
 - image_name: dongqa930/redis_hiredis:1097
   instance_id: redis_hiredis_1097
+  gold_target_file: hiredis.c
   problem_statement: "【fuzz】heap-buffer-overflow\n\r\n1、python infra/helper.py build_fuzzers\
     \ --sanitizer address hiredis\r\n2、python infra/helper.py run_fuzzer hiredis format_command_fuzzer\
     \ -rss_limit_mb=0\r\n\r\n==13==ERROR: AddressSanitizer: heap-buffer-overflow on\
@@ -168,12 +177,14 @@
     \n\n"
 - image_name: dongqa930/nanomsg_nng:1082
   instance_id: nanomsg_nng_1082
+  gold_target_file: 
   problem_statement: "Desire better way to access statistics for NNG objects\nThis\
     \ is mostly going to be useful in the test framework.\r\n\r\nWe would like to\
     \ be able to find a specific statistics tree for a dialer, listener, or socket.\r\
     \n\r\nWe might also like to find a named statistic, generically.\n"
 - image_name: dongqa930/nanomsg_nng:613
   instance_id: nanomsg_nng_613
+  gold_target_file: 
   problem_statement: "Race condition closing between header & body\nFor some protocols\
     \ (TCP, IPC, and TLS stream transports), if the pipe is closed, we\r\ncan wind\
     \ up closing the pipe, but rescheduling a transfer of data which won't fail\r\n\
@@ -181,6 +192,7 @@
     \ between receiving the message header\r\nand the message body.\r\n\n"
 - image_name: dongqa930/tencent_rapidjson:2300
   instance_id: Tencent_rapidjson_2300
+  gold_target_file: include/rapidjson/reader.h
   problem_statement: "Bug when parsing NaN, Inf with fractional or exponent parts\n\
     **Description:**\r\nWhen using the `kParseNanAndInfFlag` flag to parse NaN, Inf\
     \ with fractional or exponent parts. The parser does not correctly report an error\
@@ -198,6 +210,7 @@
     \n  } else {\r\n    cout << d.GetDouble();\r\n  }\r\n  return 0;\r\n}\r\n```\n"
 - image_name: dongqa930/tencent_rapidjson:1179
   instance_id: Tencent_rapidjson_1179
+  gold_target_file: include/rapidjson/writer.h
   problem_statement: "Compile error(sign-conversion) in WriteRawValue with different\
     \ input and output encoding\nIn commit e7cb2b1cbf5220b614c62d8a3ce1fa45965f1ffe\
     \ , following line\r\n```cpp\r\nPutUnsafe(*os_, json[i]);    // rapidjson/writer.h,\
@@ -210,6 +223,7 @@
     \ ?\n"
 - image_name: dongqa930/tencent_rapidjson:909
   instance_id: Tencent_rapidjson_909
+  gold_target_file: include/rapidjson/prettywriter.h
   problem_statement: "Truncated output json string with NaN\nSee the next code\r\n\
     ```\r\n        Document d(kObjectType);\r\n\tStringBuffer buffer;\r\n\tPrettyWriter<StringBuffer>\
     \ writer(buffer);\r\n\t\r\n\td.AddMember(\"x\", Value(22), d.GetAllocator());\r\
@@ -222,6 +236,7 @@
     \ here looks like not so bad as empty file. I have spent some time to find it.\n"
 - image_name: dongqa930/tencent_rapidjson:1018
   instance_id: Tencent_rapidjson_1018
+  gold_target_file: include/rapidjson/schema.h
   problem_statement: "Segfault with schema validator and allOf\nHi,\r\ni am getting\
     \ a segfault if i use a schema validator, a prettywriter and the schema file contains\
     \ allOf.\r\nCan you help me to investigate if i am doing something wrong?\r\n\
@@ -254,6 +269,7 @@
     \ /home/developer/ext/rapidjson/include/rapidjson/schema.h:1723\r\n```\n"
 - image_name: dongqa930/tencent_rapidjson:1065
   instance_id: Tencent_rapidjson_1065
+  gold_target_file: include/rapidjson/schema.h
   problem_statement: "Schema: GetInvalidSchemaPointer returns empty pointer when a\
     \ remote schema is violated\nA schema can include another schema from a different\
     \ file, via the `$ref` keyword where the URI includes anything other than the\
@@ -266,6 +282,7 @@
     /integer\")`.\r\n\r\nObserved: `GetInvalidSchemaPointer()` returns `Pointer()`.\n"
 - image_name: dongqa930/cliutils_cli11:1161
   instance_id: CLIUtils_CLI11_1161
+  gold_target_file: include/CLI/App.hpp
   problem_statement: "The new help formatter prints the footer and the help flag multiple\
     \ times\nHello,\n\nI’m experiencing an issue with the new help formatter #866.\
     \ The help option and footer are being printed multiple times for each instance\
@@ -283,6 +300,9 @@
     \ appear only once at the bottom \n```\n\n\n"
 - image_name: dongqa930/cliutils_cli11:1073
   instance_id: CLIUtils_CLI11_1073
+  gold_target_file:
+    - include/CLI/App.hpp
+    - include/CLI/impl/App_inl.hpp
   problem_statement: "Positional is treated as a sub-command\nCLI11: Version 2.4.1\r\
     \n\r\nI have this setup:\r\n\r\n```c++\r\nint main() {\r\n    CLI::App cli{};\r\
     \n    cli.set_help_flag();\r\n    cli.add_subcommand(\"foo\", \"Does foo\")->parse_complete_callback([&](){std::cout\
@@ -330,6 +350,7 @@
     \ could I implement my use case?\n"
 - image_name: mswebench/jqlang_m_jq:pr-2919
   instance_id: jqlang_jq_2919
+  gold_target_file: src/main.c
   problem_statement: "Allow `--` to come just before the jq program\n**Describe the\
     \ bug**\r\n`jq` has the somewhat surprising behavior of recognizing additional\
     \ options after a non-option argument has been encountered. While I won't suggest\
@@ -352,6 +373,7 @@
     \n- jq version: 1.7\r\n\r\n**Additional context**\r\nN/A"
 - image_name: mswebench/jqlang_m_jq:pr-2840
   instance_id: jqlang_jq_2840
+  gold_target_file: src/execute.c
   problem_statement: "Array indexing of negative indices wraps twice\n**Describe the\
     \ bug**\r\nNegative indices should wrap only once, not twice.\r\n\r\n**To Reproduce**\r\
     \n`jq -n '[0,1,2] | .[-5]'` produces `1`.\r\n\r\n**Expected behavior**\r\nSince\
@@ -362,6 +384,7 @@
     \ the regression of a6fe347322bfd57cab2d2612d8825b4ede765ac8."
 - image_name: mswebench/jqlang_m_jq:pr-2658
   instance_id: jqlang_jq_2658
+  gold_target_file: src/main.c
   problem_statement: "Assertion failure when using --jsonargs with invalid JSON and\
     \ printing $ARGS\nReproduction:\r\n```sh\r\n$ ./jq --version\r\njq-1.6-159-gcff5336\r\
     \n\r\n$ ./jq -n --jsonargs '$ARGS' 123 'invalid json'\r\n{\r\n  \"positional\"\
@@ -373,6 +396,7 @@
     \ earlier on invalid JSON"
 - image_name: mswebench/jqlang_m_jq:pr-2654
   instance_id: jqlang_jq_2654
+  gold_target_file: src/main.c
   problem_statement: "Commit 6d3d2750 now requires '-e' to detect syntax error in\
     \ input\n**Describe the bug**\r\nPrior to commit 6d3d2750, a syntax error in the\
     \ JSON input would cause a nonzero return code. After this change, the error code\
@@ -386,6 +410,7 @@
     Broken since commit 6d3d2750 (bisected)"
 - image_name: mswebench/jqlang_m_jq:pr-2157
   instance_id: jqlang_jq_2157
+  gold_target_file: src/builtin.c
   problem_statement: "@uri is not percent-encoding all reserved characters\n@uri documentation\
     \ in manual:\r\n```Applies percent-encoding, by mapping all reserved URI characters\
     \ to a %XX sequence.```\r\n\r\nHowever, it does not percent-encode certain reserved\
@@ -393,6 +418,7 @@
     \ '@uri' \r\n!()*%23%24%26%2B%2C%2F%3A%3B%3D%3F%40%5B%5D\r\n```"
 - image_name: mswebench/jqlang_m_jq:pr-1793
   instance_id: jqlang_jq_1793
+  gold_target_file: src/jv.c
   problem_statement: "\"contains\" filter behaves improperly with NUL characters\n\
     ### Description\r\n\r\nThe `contains(needle)` filter does not match an input that\
     \ contains\r\n`needle` only after a NUL character. In JSON (and Unicode), NUL\
@@ -405,12 +431,19 @@
     \ (Ubuntu 16.04)\r\n - jq-1.5-1-a5b5cbe"
 - image_name: mswebench/facebook_m_zstd:pr-3530
   instance_id: facebook_zstd_3530
+  gold_target_file:
+    - lib/compress/zstd_compress.c
+    - lib/zstd.h
   problem_statement: 'Add helper functions to set ZSTD_parameters on a cctx or cctxParams
 
     See PR #3395. A function that takes `ZSTD_parameters` or `ZSTD_compressionParams`,
     or `ZSTD_frameParams` and applies them to the cctx/cctxParams would be useful.'
 - image_name: mswebench/facebook_m_zstd:pr-3438
   instance_id: facebook_zstd_3438
+  gold_target_file:
+    - lib/compress/zstd_compress.c
+    - lib/compress/zstd_lazy.c
+    - lib/compress/zstd_lazy.h
   problem_statement: "Cap hashlog for row based matchfinder, chainlog for short cache\
     \ matchfinders\n[This assert](https://github.com/embg/zstd/blob/dev/lib/compress/zstd_compress_internal.h#L785)\
     \ which was added as part of short cache has uncovered two bugs:\r\n* The short\
@@ -424,6 +457,7 @@
     \ type)\r\n* Cause CI failures for debug builds\r\n\r\nCode pointer: https://github.com/facebook/zstd/blob/4f7183d887789d4d2bb2e5af850c427f1df725ff/lib/compress/zstd_compress.c#L1443"
 - image_name: mswebench/facebook_m_zstd:pr-809
   instance_id: facebook_zstd_809
+  gold_target_file: lib/dictBuilder/cover.c
   problem_statement: "Division by zero on dict training\nDivision by zero exception\
     \ instead of ZSTD_error_dstSize_tooSmall in `COVER_buildDictionary` at https://github.com/facebook/zstd/blob/dev/lib/dictBuilder/cover.c#L611\
     \ in case of small maxdict param value provided\r\n```\r\nzstd --train sample.json\
@@ -455,6 +489,7 @@
     \ parameters.k 1511\r\nCOVER_buildDictionary: epochs 0\r\n```"
 - image_name: mswebench/ponylang_m_ponyc:pr-4132
   instance_id: ponylang_ponyc_4132
+  gold_target_file: packages/builtin/string.pony
   problem_statement: 'strtof and related functions need cstring input
 
     The string-to-float conversions in builtin/string.pony are done by a call to C
@@ -462,6 +497,7 @@
     passing _ptr.   There may be other places where this happens.'
 - image_name: mswebench/ponylang_m_ponyc:pr-2203
   instance_id: ponylang_ponyc_2203
+  gold_target_file: src/libponyc/codegen/genbox.c
   problem_statement: "Unreported internal failure at gen_box\nCompiling following\
     \ code ends in internal failure:\r\n\r\n```pony\r\ntype U is (Bool | C)\r\n\r\n\
     class C\r\n  fun apply(): (I32, U) =>\r\n    (0, false)\r\n\r\nactor Main\r\n\
@@ -478,6 +514,7 @@
     \ 1)\r\n\r\nactor Main\r\n  new create(env: Env) =>\r\n    C()\r\n```"
 - image_name: mswebench/ponylang_m_ponyc:pr-2176
   instance_id: ponylang_ponyc_2176
+  gold_target_file: src/libponyc/codegen/genexpr.c
   problem_statement: "Segfault on Compilation of Tuple of Unions\n```pony\r\nprimitive\
     \ Add\r\nprimitive Dec\r\ntype AddOrDec is (Add | Dec)\r\ntype CmRDTCounterOp\
     \ is (AddOrDec, U128)\r\n\r\nclass CmRDTCounter\r\n  var _value: U128\r\n\r\n\
@@ -510,6 +547,7 @@
     \ 1\r\n    frame #13: 0x00007fff9f1645ad libdyld.dylib`start + 1\r\n```"
 - image_name: mswebench/catchorg_m_catch2:pr-2394
   instance_id: catchorg_Catch2_2394
+  gold_target_file: 
   problem_statement: "Test case name hashing should consider tags and class name too\n\
     **Describe the bug**\r\nRecently I changed the \"unique test case\" criteria to\
     \ allow test cases with same name, but different tags, or same names and tags\
@@ -526,6 +564,7 @@
     \ unit tests."
 - image_name: mswebench/catchorg_m_catch2:pr-2288
   instance_id: catchorg_Catch2_2288
+  gold_target_file: include/internal/catch_approx.h
   problem_statement: "Approx::operator() not const-correct\n**Describe the bug**\r\
     \n\r\nThe `Approx` type has an overload of `template <typename T, ...SFINAE...>\
     \ Approx operator()(T const&)` which (correct me if I'm wrong) is meant to be\
@@ -542,6 +581,7 @@
     \ the problem here."
 - image_name: mswebench/nlohmann_m_json:pr-2963
   instance_id: nlohmann_json_2963
+  gold_target_file: 
   problem_statement: "JSON_DIAGNOSTICS assertion for ordered_json\n#### What is the\
     \ issue you have?\r\n\r\nAssertion occurs with ordered_json and `JSON_DIAGNOSTICS`\
     \ when none is expected\r\n\r\n#### Please describe the steps to reproduce the\
@@ -558,6 +598,9 @@
     \r\n#### Which version of the library did you use?\r\n\r\n3.10.0"
 - image_name: mswebench/nlohmann_m_json:pr-2332
   instance_id: nlohmann_json_2332
+  gold_target_file:
+    - include/nlohmann/detail/input/lexer.hpp
+    - single_include/nlohmann/json.hpp
   problem_statement: "ignore_comment=true fails on multiple consecutive lines starting\
     \ with comments\n<!-- Provide a concise summary of the issue in the title above.\
     \ -->\r\nI know comments are not supported in json, but I'm trying to migrate\
@@ -586,6 +629,9 @@
     \n\r\n- [x ] yes\r\n- [ ] no - please copy/paste the error message below"
 - image_name: mswebench/nlohmann_m_json:pr-1769
   instance_id: nlohmann_json_1769
+  gold_target_file:
+    - include/nlohmann/detail/json_pointer.hpp
+    - single_include/nlohmann/json.hpp
   problem_statement: "json_pointer<>::back() should be const\n- What is the issue\
     \ you have?\r\nIt is impossible su use `json_pointer<>::back()` on `const json_pointer`.\r\
     \n\r\n- What is the expected behavior?\r\nI expect to be able to use on a const.\
@@ -596,6 +642,9 @@
     \ or the version from the `develop` branch?\r\ntested with 3.7.0."
 - image_name: mswebench/nlohmann_m_json:pr-1446
   instance_id: nlohmann_json_1446
+  gold_target_file:
+    - include/nlohmann/detail/output/serializer.hpp
+    - single_include/nlohmann/json.hpp
   problem_statement: "If a string has too many invalid UTF-8 characters, json::dump\
     \ attempts to index an array out of bounds.\n- What is the issue you have?\r\n\
     On Windows, with a specifically crafted JSON string object (initialised with std::string),\
@@ -675,6 +724,9 @@
     \ All pass with Visual Studio 2015."
 - image_name: mswebench/nlohmann_m_json:pr-969
   instance_id: nlohmann_json_969
+  gold_target_file:
+    - include/nlohmann/detail/conversions/from_json.hpp
+    - single_include/nlohmann/json.hpp
   problem_statement: "converting json to vector of type with templated constructor\n\
     **Bug Report**\r\n\r\nThe following code fails to compile when uncommenting line\
     \ 16:\r\n```c++\r\n#include <nlohmann/json.hpp>\r\n\r\nnamespace nl = nlohmann;\r\
@@ -690,6 +742,7 @@
     \ on VS 15.6.0 preview 2.0\r\nLibrary version 3.0.1"
 - image_name: mswebench/nlohmann_m_json:pr-708
   instance_id: nlohmann_json_708
+  gold_target_file: src/json.hpp
   problem_statement: "broken from_json implementation for pair and tuple \nI just\
     \ realized that I introduced a bug in the develop branch.\r\n\r\nThe tests pass,\
     \ because I forgot to add a test that retrieves a `pair` and a `tuple`...\r\n\
@@ -703,6 +756,9 @@
     \n```"
 - image_name: mswebench/nlohmann_m_json:pr-545
   instance_id: nlohmann_json_545
+  gold_target_file:
+    - src/json.hpp
+    - src/json.hpp.re2c
   problem_statement: "why it's not possible to serialize c++11 enums directly\n`enum\
     \ class Colors: short{ Red = 0, Green, Blue}`\r\n\r\nwhen trying to restore it\
     \ like\r\n\r\n`Colors c = json[\"color\"].get<Colors>()` it's fails with \r\n\r\
@@ -710,6 +766,7 @@
     \ from_json() method in T's namespace"
 - image_name: mswebench/simdjson_m_simdjson:pr-1896
   instance_id: simdjson_simdjson_1896
+  gold_target_file: src/generic/stage2/stringparsing.h
   problem_statement: "simdjson does not check that the value after high surrogate\
     \ is in the range of a low surrogate?\n**Describe the bug**\r\nsimdjon's dom parser\
     \ (and other parsers) will accept the string `\"\\uD888\\u1234\"`, despite `\"\
@@ -779,6 +836,7 @@
     * HACKING guide: https://github.com/simdjson/simdjson/blob/master/HACKING.md"
 - image_name: mswebench/simdjson_m_simdjson:pr-1624
   instance_id: simdjson_simdjson_1624
+  gold_target_file: 
   problem_statement: "at_pointer in On Demand should automatically rewind\nCurrently,\
     \ users of the On Demand API who use at_pointer (JSON Pointer) have to manually\
     \ rewind.\r\n\r\nWhy don't we make that automatic?"

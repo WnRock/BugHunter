@@ -94,8 +94,7 @@ def load_test_data(config: Dict[str, Any]) -> List[TestInstance]:
                 instance_id=item["instance_id"],
                 problem_statement=item["problem_statement"],
                 task_type=task_type,
-                location_hint=item.get("location_hint")
-                or config["tasks"].get("location_hint"),
+                gold_target_file=item.get("gold_target_file"),
             )
         )
 

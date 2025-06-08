@@ -34,7 +34,7 @@ class FixWithLocationTask(BaseTask):
             result_data={
                 "patch": patch_content,
                 "fix": fix_summary,
-                "location_hint": test_instance.location_hint,
+                "gold_target_file": test_instance.gold_target_file,
                 "full_response": completion_result,
             },
         )
@@ -44,40 +44,45 @@ class FixWithLocationTask(BaseTask):
         # Look for content after PATCH_READY
         patch_start = completion_result.find("PATCH_READY")
         if patch_start != -1:
-            return completion_result[patch_start + len("PATCH_READY"):].strip()
-        
+            return completion_result[patch_start + len("PATCH_READY") :].strip()
+
         # Look for diff format patches
         diff_patterns = [
-            r'diff --git.*?(?=diff --git|\Z)',
-            r'--- .*?\n\+\+\+ .*?\n@@.*?@@.*?(?=diff|---|\Z)',
-            r'@@.*?@@.*?(?=@@|\Z)'
+            r"diff --git.*?(?=diff --git|\Z)",
+            r"--- .*?\n\+\+\+ .*?\n@@.*?@@.*?(?=diff|---|\Z)",
+            r"@@.*?@@.*?(?=@@|\Z)",
         ]
-        
+
         for pattern in diff_patterns:
             matches = re.findall(pattern, completion_result, re.DOTALL)
             if matches:
-                return '\n'.join(matches).strip()
-        
+                return "\n".join(matches).strip()
+
         # Look for code blocks that might contain patches
-        code_blocks = re.findall(r'```(?:diff|patch)?\n(.*?)\n```', completion_result, re.DOTALL)
+        code_blocks = re.findall(
+            r"```(?:diff|patch)?\n(.*?)\n```", completion_result, re.DOTALL
+        )
         if code_blocks:
-            return '\n'.join(code_blocks).strip()
-        
+            return "\n".join(code_blocks).strip()
+
         return completion_result.strip()
 
     def _extract_fix_summary(self, completion_result: str) -> str:
         """Extract a summary of the targeted fix"""
         # Look for explanation before the patch
-        lines = completion_result.split('\n')
+        lines = completion_result.split("\n")
         fix_lines = []
-        
+
         for line in lines:
             line = line.strip()
-            if any(keyword in line.lower() for keyword in ['patch_ready', 'diff --git', '@@', '+++']):
+            if any(
+                keyword in line.lower()
+                for keyword in ["patch_ready", "diff --git", "@@", "+++"]
+            ):
                 break
-            if line and not line.startswith('#') and len(line) > 10:
+            if line and not line.startswith("#") and len(line) > 10:
                 fix_lines.append(line)
                 if len(fix_lines) >= 4:  # Limit summary length
                     break
-        
-        return ' '.join(fix_lines) if fix_lines else "Targeted bug fix applied"
+
+        return " ".join(fix_lines) if fix_lines else "Targeted bug fix applied"

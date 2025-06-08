@@ -4,7 +4,6 @@
 tasks:
   task_type: locate_bug
   test_data_file: data/test_set.yaml
-  location_hint: null
   target_instances:
     - dunst_project_dunst_1215
     - dunst_project_dunst_914

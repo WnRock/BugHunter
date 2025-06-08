@@ -7,7 +7,7 @@ import yaml
 from openai import OpenAI
 from typing import Optional
 from bughunter.core.trajectory_recorder import TrajectoryRecorder
-from bughunter.core.models import ExecutionResult, AgentConfig, TaskType
+from bughunter.core.models import ExecutionResult, AgentConfig, TaskType, TestInstance
 
 
 class IssueAgent:
@@ -91,17 +91,12 @@ class IssueAgent:
 
     def initialize_conversation(
         self,
-        problem_statement: str,
-        instance_id: str,
-        task_type: TaskType,
-        location_hint: Optional[str] = None,
+        test_instance: TestInstance,
     ) -> str:
         """Initialize the conversation with the problem statement and task type"""
 
         # Load task-specific prompt
-        task_prompt = self._load_task_prompt(
-            task_type, problem_statement, instance_id, location_hint
-        )
+        task_prompt = self._load_task_prompt(test_instance)
 
         self.conversation_history = [{"role": "system", "content": task_prompt}]
 
@@ -186,10 +181,7 @@ Please provide the next command or your analysis."""
 
     def _load_task_prompt(
         self,
-        task_type: TaskType,
-        problem_statement: str,
-        instance_id: str,
-        location_hint: Optional[str] = None,
+        test_instance: TestInstance,
     ) -> str:
         """Load the appropriate prompt template for the task type"""
 
@@ -204,12 +196,12 @@ Please provide the next command or your analysis."""
             ),
         }
 
-        if task_type not in prompt_file_map:
-            raise ValueError(f"Unknown task type: {task_type}")
+        if test_instance.task_type not in prompt_file_map:
+            raise ValueError(f"Unknown task type: {test_instance.task_type}")
 
         # Build the full path to the prompt file
         prompt_dir = self.prompts_config.get("directory", "bughunter/prompts")
-        prompt_file = prompt_file_map[task_type]
+        prompt_file = prompt_file_map[test_instance.task_type]
 
         # Handle relative paths by making them relative to the project root
         if not os.path.isabs(prompt_dir):
@@ -227,15 +219,24 @@ Please provide the next command or your analysis."""
         except Exception as e:
             raise Exception(f"Error reading prompt file {prompt_path}: {e}")
 
-        # Format the template with the provided variables
-        location_hint_text = (
-            f"\nLocation Hint: {location_hint}" if location_hint else ""
-        )
+        # Prepare location hint from gold_target_file
+        location_hint_text = ""
+        if test_instance.gold_target_file:
+            if isinstance(test_instance.gold_target_file, list):
+                # Multiple files
+                files_text = ", ".join(test_instance.gold_target_file)
+                location_hint_text = (
+                    f"\nLocation Hint: The bug is likely in these files: {files_text}"
+                )
+            else:
+                # Single file
+                location_hint_text = f"\nLocation Hint: The bug is likely in this file: {test_instance.gold_target_file}"
 
+        # Format the template with the provided variables
         try:
             formatted_prompt = prompt_template.format(
-                instance_id=instance_id,
-                problem_statement=problem_statement,
+                instance_id=test_instance.instance_id,
+                problem_statement=test_instance.problem_statement,
                 location_hint=location_hint_text,
             )
         except KeyError as e:
