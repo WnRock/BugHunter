@@ -113,7 +113,7 @@ The system now records comprehensive trajectories of all agent interactions, inc
 Each trajectory includes:
 ```json
 {
-    "environment": "swe_main",
+    "environment": "dongqa930/dunst-project_dunst:1215",
     "trajectory": [
         {
             "action": "ls -F\n",

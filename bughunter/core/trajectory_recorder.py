@@ -19,7 +19,9 @@ from bughunter.core.models import (
 class TrajectoryRecorder:
     """Records trajectories of agent interactions during task execution"""
 
-    def __init__(self, environment: str = "swe_main", working_dir: str = "/"):
+    def __init__(self, environment: str = None, working_dir: str = "/"):
+        if environment is None:
+            raise ValueError("Environment (docker image name) must be provided")
         self.trajectory = Trajectory(environment=environment)
         self.working_dir = working_dir
         self.open_file = "n/a"

@@ -38,9 +38,9 @@ class BaseTask(ABC):
             f"Starting {test_instance.task_type.value} task: {test_instance.instance_id}"
         )
 
-        # Initialize trajectory recorder
+        # Initialize trajectory recorder with the actual docker image name
         self.trajectory_recorder = TrajectoryRecorder(
-            environment="swe_main",
+            environment=test_instance.image_name,
             working_dir=f"/{test_instance.instance_id.replace('_', '-')}",
         )
 
