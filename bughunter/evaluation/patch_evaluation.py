@@ -252,11 +252,26 @@ def run_patch_test(
                     f"Failed to copy patch to container: {copy_result.stderr}"
                 )
 
-            # Make sure fix_run.sh is executable and run it
-            docker_manager.execute_command("chmod +x /home/fix_run.sh")
+            # Check which test script exists and make it executable
+            script_names = ["fix_run.sh", "fix-run.sh"]
+            test_script = None
+
+            for script_name in script_names:
+                check_result = docker_manager.execute_command(
+                    f"test -f /home/{script_name}"
+                )
+                if check_result.exit_code == 0:
+                    test_script = f"/home/{script_name}"
+                    break
+
+            if not test_script:
+                raise Exception("Neither fix_run.sh nor fix-run.sh found in container")
+
+            # Make the test script executable
+            docker_manager.execute_command(f"chmod +x {test_script}")
 
             # Run the test script
-            test_result = docker_manager.execute_command("/home/fix_run.sh")
+            test_result = docker_manager.execute_command(test_script)
 
             return {
                 "instance_id": instance_id,
