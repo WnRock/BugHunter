@@ -9,6 +9,7 @@ import json
 import logging
 import argparse
 from typing import List, Dict, Any
+from bughunter.evaluation import run_evaluation
 from bughunter.tasks.fix_bug_task import FixBugTask
 from bughunter.utils.setup import main as setup_main
 from bughunter.tasks.locate_bug_task import LocateBugTask
@@ -158,22 +159,6 @@ def run_setup_if_needed(config_file_path):
         sys.exit(1)
 
 
-# Worker function for processing each test instance
-def process_test_instance(test_instance, pipeline, output_dir):
-    logging.info(
-        f"Processing {test_instance.task_type.value} task: {test_instance.instance_id}"
-    )
-    result = pipeline.solve_issue(test_instance)
-
-    # Save instance-specific result files (for batch functionality)
-    save_instance_result_files(result, output_dir)
-
-    # Save trajectory to separate file (always enabled by default)
-    save_trajectory_file(result, output_dir)
-
-    return convert_result_to_dict(result)
-
-
 # Worker function for multiprocessing
 def worker_process_instance(args):
     """
@@ -236,6 +221,25 @@ def main():
         "--config", default="config.yaml", help="Path to config file"
     )
 
+    # Evaluate subcommand
+    eval_parser = subparsers.add_parser(
+        "evaluate", help="Evaluate locate_bug results against gold truth"
+    )
+    eval_parser.add_argument(
+        "results", help="Path to results.json file with LLM outputs"
+    )
+    eval_parser.add_argument(
+        "--test-data", help="Path to test_set.yaml file (default: data/test_set.yaml)"
+    )
+    eval_parser.add_argument(
+        "--output", help="Path to save detailed evaluation results (JSON format)"
+    )
+    eval_parser.add_argument(
+        "--detailed",
+        action="store_true",
+        help="Show detailed results for each instance",
+    )
+
     args = parser.parse_args()
 
     # Handle setup command
@@ -247,6 +251,17 @@ def main():
             setup_main(args.config)
         finally:
             os.chdir(original_cwd)
+        return
+
+    # Handle evaluate command
+    if args.command == "evaluate":
+        # Setup basic logging for evaluation
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stdout)],
+        )
+        run_evaluation(args)
         return
 
     # Handle run command - automatically run setup first

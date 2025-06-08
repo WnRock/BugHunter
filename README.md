@@ -91,6 +91,13 @@ python main.py run [options]
 
 Executes the bug-solving pipeline with various options for task types, models, and output configuration.
 
+### Evaluate Command
+```bash
+python main.py evaluate <results_file> [options]
+```
+
+Evaluates the correctness of locate_bug results by comparing LLM outputs with gold truth data.
+
 ## Trajectory Recording
 
 The system now records comprehensive trajectories of all agent interactions, including:
