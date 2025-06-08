@@ -1,0 +1,50 @@
+# Agent-based Issue Solving System Configuration
+
+# Task Configuration
+tasks:
+  task_type: locate_bug
+  test_data_file: data/test_set.yaml
+  location_hint: null
+  target_instances:
+    - dunst_project_dunst_1215
+
+# Output Settings
+output:
+  # Files will be saved to: <output_dir>/<instance_id>/
+  # If not specified or null, defaults to current working directory
+  output_dir: output
+  # Fixed output files for automated testing
+  run_log: run.log
+  trajectory: trajectory.json
+  result: result.txt
+
+# LLM Model Configuration
+model:
+  name: DeepSeek-V3
+  base_url: https://api.deepseek.com/v1
+  api_key: "{OPENAI_API_KEY}"
+  generation:
+    temperature: 0.1
+    max_tokens: 4000
+
+# System Settings
+system:
+  max_iterations: 50
+  timeout_seconds: 300
+  log_level: INFO
+  # Number of parallel workers for processing multiple instances (default: 1 for sequential processing)
+  num_workers: 1
+
+# Docker Settings
+docker:
+  pull_timeout: 600
+  execution_timeout: 120
+  cleanup_on_exit: true
+  network_mode: bridge
+
+# Prompts Configuration
+prompts:
+  directory: bughunter/prompts
+  fix_bug: fix_bug.txt
+  locate_bug: locate_bug.txt
+  fix_with_location: fix_with_location.txt
