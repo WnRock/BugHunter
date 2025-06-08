@@ -2,12 +2,13 @@
 
 # Task Configuration
 tasks:
+  # Available tasks: fix_bug, locate_bug, fix_with_location
   task_type: locate_bug
   test_data_file: data/test_set.yaml
-  target_instances:
-    - dunst_project_dunst_1215
-    - dunst_project_dunst_914
-    - redis_hiredis_427
+  # target_instances:
+  #   - dunst_project_dunst_1215
+  #   - dunst_project_dunst_914
+  #   - redis_hiredis_427
 
 # Output Settings
 output:
