@@ -9,11 +9,11 @@ import json
 import logging
 import argparse
 from typing import List, Dict, Any
-from bughunter.evaluation import run_evaluation
 from bughunter.tasks.fix_bug_task import FixBugTask
 from bughunter.utils.setup import main as setup_main
 from bughunter.tasks.locate_bug_task import LocateBugTask
 from concurrent.futures import ProcessPoolExecutor, as_completed
+from bughunter.evaluation import run_evaluation, run_patch_evaluation
 from bughunter.tasks.fix_with_location_task import FixWithLocationTask
 from bughunter.core.models import TestInstance, TaskResult, AgentConfig, TaskType
 from bughunter.utils.output_manager import (
@@ -221,7 +221,7 @@ def main():
         "--config", default="config.yaml", help="Path to config file"
     )
 
-    # Evaluate subcommand
+    # Evaluate subcommand (for locate_bug results)
     eval_parser = subparsers.add_parser(
         "evaluate", help="Evaluate locate_bug results against gold truth"
     )
@@ -240,6 +240,22 @@ def main():
         help="Show detailed results for each instance",
     )
 
+    # Evaluate patch subcommand (for fix_bug results)
+    eval_patch_parser = subparsers.add_parser(
+        "evaluate-patch", help="Evaluate fix patch results by running tests in Docker"
+    )
+    eval_patch_parser.add_argument(
+        "results", help="Path to results.json file containing patches"
+    )
+    eval_patch_parser.add_argument(
+        "--output", help="Path to save detailed evaluation results (JSON format)"
+    )
+    eval_patch_parser.add_argument(
+        "--detailed",
+        action="store_true",
+        help="Show detailed results for each instance",
+    )
+
     args = parser.parse_args()
 
     # Handle setup command
@@ -253,7 +269,7 @@ def main():
             os.chdir(original_cwd)
         return
 
-    # Handle evaluate command
+    # Handle evaluate command (locate_bug)
     if args.command == "evaluate":
         # Setup basic logging for evaluation
         logging.basicConfig(
@@ -262,6 +278,17 @@ def main():
             handlers=[logging.StreamHandler(sys.stdout)],
         )
         run_evaluation(args)
+        return
+
+    # Handle evaluate-patch command (fix_bug)
+    if args.command == "evaluate-patch":
+        # Setup basic logging for patch evaluation
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stdout)],
+        )
+        run_patch_evaluation(args)
         return
 
     # Handle run command - automatically run setup first
