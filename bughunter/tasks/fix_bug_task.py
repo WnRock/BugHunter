@@ -34,7 +34,7 @@ class FixBugTask(BaseTask):
             result_data={
                 "patch": patch_content,
                 "solution": solution_summary,
-                "full_response": completion_result
+                "full_response": completion_result,
             },
         )
 
@@ -43,40 +43,58 @@ class FixBugTask(BaseTask):
         # Look for content after PATCH_READY
         patch_start = completion_result.find("PATCH_READY")
         if patch_start != -1:
-            return completion_result[patch_start + len("PATCH_READY"):].strip()
-        
-        # Look for diff format patches
+            patch_content = completion_result[
+                patch_start + len("PATCH_READY") :
+            ].strip()
+
+            # Extract diff block if it's wrapped in code blocks
+            diff_block_match = re.search(
+                r"```(?:diff)?\n(.*?)\n```", patch_content, re.DOTALL
+            )
+            if diff_block_match:
+                return diff_block_match.group(1).strip()
+
+            # If no code block, return content after PATCH_READY
+            return patch_content
+
+        # Look for diff format patches in code blocks
+        code_blocks = re.findall(
+            r"```(?:diff|patch)?\n(.*?)\n```", completion_result, re.DOTALL
+        )
+        for block in code_blocks:
+            if "---" in block and "+++" in block and "@@" in block:
+                return block.strip()
+
+        # Look for diff format patches without code blocks
         diff_patterns = [
-            r'diff --git.*?(?=diff --git|\Z)',
-            r'--- .*?\n\+\+\+ .*?\n@@.*?@@.*?(?=diff|---|\Z)',
-            r'@@.*?@@.*?(?=@@|\Z)'
+            r"--- .*?\n\+\+\+ .*?\n@@.*?@@.*?(?=\n---|$)",
+            r"diff --git.*?(?=diff --git|$)",
         ]
-        
+
         for pattern in diff_patterns:
             matches = re.findall(pattern, completion_result, re.DOTALL)
             if matches:
-                return '\n'.join(matches).strip()
-        
-        # Look for code blocks that might contain patches
-        code_blocks = re.findall(r'```(?:diff|patch)?\n(.*?)\n```', completion_result, re.DOTALL)
-        if code_blocks:
-            return '\n'.join(code_blocks).strip()
-        
+                return "\n".join(matches).strip()
+
+        # Fallback: return the full completion if no specific pattern found
         return completion_result.strip()
 
     def _extract_solution_summary(self, completion_result: str) -> str:
         """Extract a summary of the solution approach"""
         # Look for explanation before the patch
-        lines = completion_result.split('\n')
+        lines = completion_result.split("\n")
         summary_lines = []
-        
+
         for line in lines:
             line = line.strip()
-            if any(keyword in line.lower() for keyword in ['patch_ready', 'diff --git', '@@', '+++']):
+            if any(
+                keyword in line.lower()
+                for keyword in ["patch_ready", "diff --git", "@@", "+++"]
+            ):
                 break
-            if line and not line.startswith('#') and len(line) > 10:
+            if line and not line.startswith("#") and len(line) > 10:
                 summary_lines.append(line)
                 if len(summary_lines) >= 5:  # Limit summary length
                     break
-        
-        return ' '.join(summary_lines) if summary_lines else "Bug fix applied"
+
+        return " ".join(summary_lines) if summary_lines else "Bug fix applied"

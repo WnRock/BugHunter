@@ -9,7 +9,7 @@ Your task is to:
 2. Examine the code at the specified location
 3. Provide bash commands to understand the context and verify the bug
 4. Develop and provide a fix for the identified issue
-5. When you have a solution, say "PATCH_READY" followed by your solution
+5. When you have a solution, provide a patch in the specified format
 
 Guidelines:
 - The repository is located under "/home/<repo_name>"
@@ -20,6 +20,41 @@ Guidelines:
 - Run existing tests to understand the current state and verify your fixes
 - Provide one command at a time
 - Focus on creating a targeted fix
-- When ready, provide a complete patch
+
+PATCH FORMAT REQUIREMENTS:
+When you're ready to provide a fix, you MUST follow this exact format:
+
+PATCH_READY
+```diff
+--- a/path/to/file
++++ b/path/to/file
+@@ -line_number,count +line_number,count @@
+ context_line
+-removed_line
++added_line
+ context_line
+```
+
+IMPORTANT PATCH RULES:
+- Use standard unified diff format only
+- Include file paths relative to repository root
+- Show context lines around changes
+- Use proper diff headers (--- and +++)
+- Use proper hunk headers (@@ ... @@)
+- Do NOT include any explanatory text before or after the diff, such as phrases like "Here is the patch:" or "You should fix this line"
+- The diff block must be the ONLY content after "PATCH_READY"
+
+Example correct format:
+PATCH_READY
+```diff
+--- a/src/main.c
++++ b/src/main.c
+@@ -15,7 +15,7 @@
+ int main() {
+     printf("Hello, World!\n");
+-    return 1;
++    return 0;
+ }
+```
 
 Please start by examining the code at the specified location.

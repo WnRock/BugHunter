@@ -44,27 +44,34 @@ class FixWithLocationTask(BaseTask):
         # Look for content after PATCH_READY
         patch_start = completion_result.find("PATCH_READY")
         if patch_start != -1:
-            return completion_result[patch_start + len("PATCH_READY") :].strip()
+            patch_content = completion_result[patch_start + len("PATCH_READY"):].strip()
+            
+            # Extract diff block if it's wrapped in code blocks
+            diff_block_match = re.search(r'```(?:diff)?\n(.*?)\n```', patch_content, re.DOTALL)
+            if diff_block_match:
+                return diff_block_match.group(1).strip()
+            
+            # If no code block, return content after PATCH_READY
+            return patch_content
 
-        # Look for diff format patches
+        # Look for diff format patches in code blocks
+        code_blocks = re.findall(r'```(?:diff|patch)?\n(.*?)\n```', completion_result, re.DOTALL)
+        for block in code_blocks:
+            if '---' in block and '+++' in block and '@@' in block:
+                return block.strip()
+
+        # Look for diff format patches without code blocks
         diff_patterns = [
-            r"diff --git.*?(?=diff --git|\Z)",
-            r"--- .*?\n\+\+\+ .*?\n@@.*?@@.*?(?=diff|---|\Z)",
-            r"@@.*?@@.*?(?=@@|\Z)",
+            r'--- .*?\n\+\+\+ .*?\n@@.*?@@.*?(?=\n---|$)',
+            r'diff --git.*?(?=diff --git|$)'
         ]
 
         for pattern in diff_patterns:
             matches = re.findall(pattern, completion_result, re.DOTALL)
             if matches:
-                return "\n".join(matches).strip()
+                return '\n'.join(matches).strip()
 
-        # Look for code blocks that might contain patches
-        code_blocks = re.findall(
-            r"```(?:diff|patch)?\n(.*?)\n```", completion_result, re.DOTALL
-        )
-        if code_blocks:
-            return "\n".join(code_blocks).strip()
-
+        # Fallback: return the full completion if no specific pattern found
         return completion_result.strip()
 
     def _extract_fix_summary(self, completion_result: str) -> str:
