@@ -7,6 +7,8 @@ tasks:
   location_hint: null
   target_instances:
     - dunst_project_dunst_1215
+    - dunst_project_dunst_914
+    - redis_hiredis_427
 
 # Output Settings
 output:
@@ -32,8 +34,9 @@ system:
   max_iterations: 50
   timeout_seconds: 300
   log_level: INFO
-  # Number of parallel workers for processing multiple instances (default: 1 for sequential processing)
-  num_workers: 1
+  # Number of parallel workers for processing multiple instances
+  # set to 1 for sequential processing
+  num_workers: 3
 
 # Docker Settings
 docker:
