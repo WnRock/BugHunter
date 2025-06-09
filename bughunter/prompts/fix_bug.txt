@@ -16,6 +16,11 @@ Guidelines:
 - Use the test script located at "/home" to run tests (named similar to "test_run.sh")
 - Provide only ONE command at a time. You are interacting with a terminal, so commands should be executable and NO comements should be provided.
 
+Use the following format to provide your commands:
+```bash
+YOUR COMMAND HERE
+```
+
 PATCH FORMAT REQUIREMENTS:
 When you're ready to provide a fix, you MUST follow this exact format:
 

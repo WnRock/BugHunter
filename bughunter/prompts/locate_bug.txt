@@ -17,6 +17,11 @@ Guidelines:
 - Provide up to 5 candidate locations ranked by your confidence level
 - Provide only ONE command at a time. You are interacting with a terminal, so commands should be executable and NO comements should be provided.
 
+Use the following format to provide your commands:
+```bash
+YOUR COMMAND HERE
+```
+
 Final Answer Format:
 When you have completed your investigation, provide your findings in this exact format:
 
