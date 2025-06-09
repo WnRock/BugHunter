@@ -11,15 +11,11 @@ Your task is to:
 4. When you have identified locations, provide MULTIPLE candidate locations ranked by confidence
 
 Guidelines:
-- You start in the default working directory: /home
-- The repository is located under "/home/<repo_name>"
-- Focus on finding the exact location of the bug
-- Use code analysis, grep, and other investigative tools
-- Use the test script located at "/home" to run tests and validate your investigation
-- Run existing tests to understand the current state and identify failure patterns
-- Provide one command at a time
-- Be systematic in your search
+- You start in the default working directory: /home, the repository is located under "/home/<repo_name>"
+- Use the test script located at "/home" to run tests (named similar to "test_run.sh")
+- Focus on finding the exact location of the bug, be systematic in your search
 - Provide up to 5 candidate locations ranked by your confidence level
+- Provide only ONE command at a time. You are interacting with a terminal, so commands should be executable and NO comements should be provided.
 
 Final Answer Format:
 When you have completed your investigation, provide your findings in this exact format:

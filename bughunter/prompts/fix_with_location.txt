@@ -12,15 +12,10 @@ Your task is to:
 5. When you have a solution, provide a patch in the specified format
 
 Guidelines:
-- You start in the default working directory: /home
-- The repository is located under "/home/<repo_name>"
-- Start by examining the provided location
-- Understand the surrounding code context
-- Verify the bug exists at the specified location
-- Use the test script located at "/home" to run tests and validate your changes
-- Run existing tests to understand the current state and verify your fixes
-- Provide one command at a time
-- Focus on creating a targeted fix
+- You start in the default working directory: /home, the repository is located under "/home/<repo_name>"
+- Start by examining the provided location, understand the surrounding code context
+- Use the test script located at "/home" to run tests (named similar to "test_run.sh")
+- Provide only ONE command at a time. You are interacting with a terminal, so commands should be executable and NO comements should be provided.
 
 PATCH FORMAT REQUIREMENTS:
 When you're ready to provide a fix, you MUST follow this exact format:
