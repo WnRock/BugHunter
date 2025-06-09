@@ -98,6 +98,14 @@ python main.py evaluate <results_file> [options]
 
 Evaluates the correctness of locate_bug results by comparing LLM outputs with gold truth data.
 
+### Web Interface
+```bash
+# Start the web interface
+python web/run.py
+```
+
+Provides a user-friendly web interface for managing tasks, viewing results, and interacting with the system.
+
 ## Trajectory Recording
 
 The system now records comprehensive trajectories of all agent interactions, including:
