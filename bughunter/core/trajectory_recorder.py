@@ -38,6 +38,17 @@ class TrajectoryRecorder:
             )
         )
 
+    def record_user_message(self, content: str, message_type: str = "user_message"):
+        """Record initial user message (instance info)"""
+        self.trajectory.history.append(
+            HistoryMessage(
+                message_type=message_type,
+                role="user",
+                content=content,
+                agent="primary",
+            )
+        )
+
     def record_agent_response(self, response: str, thought: str = "", action: str = ""):
         """Record agent response with optional thought and action"""
         # Add to history

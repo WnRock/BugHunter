@@ -85,14 +85,24 @@ class IssueAgent:
     ) -> str:
         """Initialize the conversation with the problem statement and task type"""
 
-        # Load task-specific prompt
-        task_prompt = self._load_task_prompt(test_instance)
+        # Load task-specific system prompt (without instance-specific info)
+        system_prompt = self._load_system_prompt(test_instance.task_type)
 
-        self.conversation_history = [{"role": "system", "content": task_prompt}]
+        # Create instance-specific user message
+        instance_message = self._create_instance_message(test_instance)
 
-        # Record system prompt in trajectory
+        # Initialize conversation with system prompt and instance info
+        self.conversation_history = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": instance_message},
+        ]
+
+        # Record system prompt and instance info in trajectory
         if self.trajectory_recorder:
-            self.trajectory_recorder.record_system_prompt(task_prompt)
+            self.trajectory_recorder.record_system_prompt(system_prompt)
+            self.trajectory_recorder.record_user_message(
+                instance_message, "instance_info"
+            )
 
         response = self.client.chat.completions.create(
             model=self.config.model_name,
@@ -102,11 +112,14 @@ class IssueAgent:
         )
 
         assistant_message = response.choices[0].message.content
-        self.conversation_history.append(
-            {"role": "assistant", "content": assistant_message}
-        )
 
-        # Record API call and agent response
+        # DON'T add full assistant response to conversation history - save for trajectory only
+        # Extract command and add only that to conversation history if present
+        command = self.extract_command(assistant_message)
+        if command:
+            self.conversation_history.append({"role": "assistant", "content": f"Command: {command}"})
+
+        # Record full response in trajectory
         if self.trajectory_recorder:
             self.trajectory_recorder.record_api_call(
                 tokens_sent=response.usage.prompt_tokens if response.usage else 0,
@@ -115,8 +128,6 @@ class IssueAgent:
                 ),
             )
 
-            # Extract command for trajectory recording
-            command = self.extract_command(assistant_message)
             self.trajectory_recorder.record_agent_response(
                 response=assistant_message, action=command if command else ""
             )
@@ -125,18 +136,17 @@ class IssueAgent:
 
     def send_command_result(self, command: str, result: ExecutionResult) -> str:
         """Send command execution result to the agent and get next instruction"""
-        user_message = f"""Command executed: {command}
-Exit code: {result.exit_code}
-STDOUT:
-{result.stdout}
-STDERR:
-{result.stderr}
+        # Create brief command result message for conversation history
+        brief_message = f"Command: {command}\nResult: Exit code {result.exit_code}"
+        if result.stdout.strip():
+            brief_message += f"\nStdout: {result.stdout}"
+        if result.stderr.strip():
+            brief_message += f"\nStderr: {result.stderr}"
 
-Please provide the next command or your analysis."""
+        # Add only the brief command result to conversation history
+        self.conversation_history.append({"role": "user", "content": brief_message})
 
-        self.conversation_history.append({"role": "user", "content": user_message})
-
-        # Record command execution in trajectory
+        # Record full command execution details in trajectory
         if self.trajectory_recorder:
             self.trajectory_recorder.record_command_execution(command, result)
 
@@ -148,11 +158,13 @@ Please provide the next command or your analysis."""
         )
 
         assistant_message = response.choices[0].message.content
-        self.conversation_history.append(
-            {"role": "assistant", "content": assistant_message}
-        )
 
-        # Record API call and agent response
+        # DON'T add full assistant response to conversation history - only extract command
+        next_command = self.extract_command(assistant_message)
+        if next_command:
+            self.conversation_history.append({"role": "assistant", "content": f"Command: {next_command}"})
+
+        # Record full response in trajectory
         if self.trajectory_recorder:
             self.trajectory_recorder.record_api_call(
                 tokens_sent=response.usage.prompt_tokens if response.usage else 0,
@@ -161,19 +173,14 @@ Please provide the next command or your analysis."""
                 ),
             )
 
-            # Extract command for trajectory recording
-            next_command = self.extract_command(assistant_message)
             self.trajectory_recorder.record_agent_response(
                 response=assistant_message, action=next_command if next_command else ""
             )
 
         return assistant_message
 
-    def _load_task_prompt(
-        self,
-        test_instance: TestInstance,
-    ) -> str:
-        """Load the appropriate prompt template for the task type"""
+    def _load_system_prompt(self, task_type: TaskType) -> str:
+        """Load the system prompt template for the task type (without instance-specific info)"""
 
         # Determine the prompt file name based on task type
         prompt_file_map = {
@@ -186,12 +193,12 @@ Please provide the next command or your analysis."""
             ),
         }
 
-        if test_instance.task_type not in prompt_file_map:
-            raise ValueError(f"Unknown task type: {test_instance.task_type}")
+        if task_type not in prompt_file_map:
+            raise ValueError(f"Unknown task type: {task_type}")
 
         # Build the full path to the prompt file
         prompt_dir = self.prompts_config.get("directory", "bughunter/prompts")
-        prompt_file = prompt_file_map[test_instance.task_type]
+        prompt_file = prompt_file_map[task_type]
 
         # Handle relative paths by making them relative to the project root
         if not os.path.isabs(prompt_dir):
@@ -203,14 +210,21 @@ Please provide the next command or your analysis."""
         # Load the prompt template from file
         try:
             with open(prompt_path, "r", encoding="utf-8") as f:
-                prompt_template = f.read().strip()
+                system_prompt = f.read().strip()
         except FileNotFoundError:
             raise FileNotFoundError(f"Prompt file not found: {prompt_path}")
         except Exception as e:
             raise Exception(f"Error reading prompt file {prompt_path}: {e}")
 
-        # Prepare location hint from gold_target_file
-        location_hint_text = ""
+        return system_prompt
+
+    def _create_instance_message(self, test_instance: TestInstance) -> str:
+        """Create instance-specific user message with problem statement and hints"""
+
+        message = f"Instance ID: {test_instance.instance_id}\n\n"
+        message += f"Problem Statement:\n{test_instance.problem_statement}"
+
+        # Add location hint if available and task type is FIX_WITH_LOCATION
         if (
             test_instance.gold_target_file
             and test_instance.task_type == TaskType.FIX_WITH_LOCATION
@@ -218,26 +232,14 @@ Please provide the next command or your analysis."""
             if isinstance(test_instance.gold_target_file, list):
                 # Multiple files
                 files_text = ", ".join(test_instance.gold_target_file)
-                location_hint_text = (
-                    f"\nLocation Hint: The bug is likely in these files: {files_text}"
+                message += (
+                    f"\n\nLocation Hint: The bug is likely in these files: {files_text}"
                 )
             else:
                 # Single file
-                location_hint_text = f"\nLocation Hint: The bug is likely in this file: {test_instance.gold_target_file}"
+                message += f"\n\nLocation Hint: The bug is likely in this file: {test_instance.gold_target_file}"
 
-        # Format the template with the provided variables
-        try:
-            formatted_prompt = prompt_template.format(
-                instance_id=test_instance.instance_id,
-                problem_statement=test_instance.problem_statement,
-                location_hint=location_hint_text,
-            )
-        except KeyError as e:
-            raise ValueError(
-                f"Missing placeholder in prompt template {prompt_path}: {e}"
-            )
-
-        return formatted_prompt
+        return message
 
     def extract_command(self, agent_response: str) -> Optional[str]:
         """Extract bash command from agent response"""

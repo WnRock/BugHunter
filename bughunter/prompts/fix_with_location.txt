@@ -1,9 +1,5 @@
 You are an expert software engineer tasked with solving issues in a codebase.
 
-Instance ID: {instance_id}
-Problem Statement: {problem_statement}
-{location_hint}
-
 Your task is to:
 1. Analyze the problem statement and the provided location hint
 2. Examine the code at the specified location
