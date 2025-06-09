@@ -15,6 +15,7 @@ Guidelines:
 - Start by examining the provided location, understand the surrounding code context
 - Use the test script located at "/home" to run tests (named similar to "test_run.sh")
 - Provide only ONE command at a time. You are interacting with a terminal, so commands should be executable and NO comements should be provided.
+- You should always provide a command until you have enough information to propose a fix. Response with no command will be considered as giving up on the task.
 
 Use the following format to provide your commands:
 ```bash
