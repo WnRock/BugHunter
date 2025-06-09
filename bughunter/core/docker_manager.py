@@ -26,30 +26,84 @@ class DockerManager:
             # Pull the image if it doesn't exist locally
             try:
                 self.client.images.get(image_name)
+                logging.info(f"Image {image_name} found locally")
             except docker.errors.ImageNotFound:
                 logging.info(f"Pulling image {image_name}...")
                 self.client.images.pull(image_name)
 
-            # Start the container
+            # Start the container with better process handling
             self.container = self.client.containers.run(
                 image_name,
-                command="sleep infinity",  # Keep container running
+                command=[
+                    "sleep",
+                    "infinity",
+                ],  # Use array form for better process handling
                 detach=True,
                 working_dir="/home",
                 tty=True,
+                stdin_open=True,  # Keep STDIN open
+                remove=False,  # Don't auto-remove so we can check logs if it fails
             )
 
             # Store the image name for potential restart
             self.current_image = image_name
 
-            # Wait for container to be ready
-            time.sleep(2)
+            # Wait longer for container to be fully ready and verify it's actually running
+            max_wait_time = 10  # Maximum wait time in seconds
+            wait_interval = 0.5  # Check every 0.5 seconds
+            total_waited = 0
 
-            logging.info(f"Container {self.container.short_id} started successfully")
-            return True
+            while total_waited < max_wait_time:
+                time.sleep(wait_interval)
+                total_waited += wait_interval
+
+                # Check if container is running
+                if self._is_container_running():
+                    # Additional check: try to execute a simple command to verify the container is responsive
+                    try:
+                        test_result = self.container.exec_run(
+                            "echo 'container_ready'",
+                            stdout=True,
+                            stderr=True,
+                            timeout=5,
+                        )
+                        if test_result.exit_code == 0:
+                            logging.info(
+                                f"Container {self.container.short_id} started successfully and is responsive"
+                            )
+                            return True
+                    except Exception as e:
+                        logging.warning(f"Container responsiveness test failed: {e}")
+                        continue  # Continue waiting
+                else:
+                    # Container stopped, check logs for the error
+                    try:
+                        logs = self.container.logs().decode("utf-8", errors="replace")
+                        logging.error(f"Container failed to start. Logs: {logs}")
+                    except:
+                        pass
+                    return False
+
+            # If we get here, the container didn't become responsive in time
+            logging.error(
+                f"Container {self.container.short_id} started but is not responsive after {max_wait_time}s"
+            )
+            try:
+                logs = self.container.logs().decode("utf-8", errors="replace")
+                logging.error(f"Container logs: {logs}")
+            except:
+                pass
+            return False
 
         except Exception as e:
             logging.error(f"Failed to start container: {e}")
+            # If container was created but failed, try to get its logs
+            if self.container:
+                try:
+                    logs = self.container.logs().decode("utf-8", errors="replace")
+                    logging.error(f"Container logs: {logs}")
+                except:
+                    pass
             return False
 
     def _is_container_running(self) -> bool:
@@ -94,7 +148,7 @@ class DockerManager:
                 )
 
         try:
-            # Execute command
+            # Execute command with timeout to prevent hanging
             exec_result = self.container.exec_run(
                 command,
                 stdout=True,
@@ -102,6 +156,8 @@ class DockerManager:
                 tty=False,
                 workdir="/home",
                 environment={"TERM": "xterm-256color"},
+                stream=False,  # Don't stream, get all output at once
+                demux=False,  # Don't demux stdout/stderr
             )
 
             return ExecutionResult(
@@ -126,6 +182,8 @@ class DockerManager:
                             tty=False,
                             workdir="/home",
                             environment={"TERM": "xterm-256color"},
+                            stream=False,
+                            demux=False,
                         )
 
                         return ExecutionResult(
