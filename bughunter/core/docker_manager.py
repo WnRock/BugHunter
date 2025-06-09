@@ -62,10 +62,7 @@ class DockerManager:
                     # Additional check: try to execute a simple command to verify the container is responsive
                     try:
                         test_result = self.container.exec_run(
-                            "echo 'container_ready'",
-                            stdout=True,
-                            stderr=True,
-                            timeout=5,
+                            "echo 'container_ready'", stdout=True, stderr=True
                         )
                         if test_result.exit_code == 0:
                             logging.info(
