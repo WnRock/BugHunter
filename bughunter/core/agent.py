@@ -291,7 +291,7 @@ Please provide the next command or your analysis."""
             if "PATCH_READY" in agent_response:
                 return agent_response
         elif task_type == TaskType.LOCATE_BUG:
-            if "LOCATION_FOUND" in agent_response:
+            if "LOCATION_CANDIDATES" in agent_response:
                 return agent_response
 
         return None
