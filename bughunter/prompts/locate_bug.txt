@@ -13,6 +13,7 @@ Guidelines:
 - Provide up to 5 candidate locations ranked by your confidence level
 - Provide only ONE command at a time. You are interacting with a terminal, so commands should be executable and NO comements should be provided.
 - You should always provide a command until you have enough information to identify the bug location. Response with no command will be considered as giving up on the task.
+- After this system prompt, there are some previous commands attempts and their executions in the message list, you can refer to them.
 
 Use the following format to provide your commands:
 ```bash

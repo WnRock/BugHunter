@@ -117,7 +117,7 @@ class IssueAgent:
         # Extract command and add only that to conversation history if present
         command = self.extract_command(assistant_message)
         if command:
-            self.conversation_history.append({"role": "assistant", "content": f"Command: {command}"})
+            self.conversation_history.append({"role": "assistant", "content": f"```bash\n{command}\n```"})
 
         # Record full response in trajectory
         if self.trajectory_recorder:
@@ -137,7 +137,7 @@ class IssueAgent:
     def send_command_result(self, command: str, result: ExecutionResult) -> str:
         """Send command execution result to the agent and get next instruction"""
         # Create brief command result message for conversation history
-        brief_message = f"Command: {command}\nResult: Exit code {result.exit_code}"
+        brief_message = f"Command:\n```bash\n{command}\n```\nResult: Exit code {result.exit_code}"
         if result.stdout.strip():
             brief_message += f"\nStdout: {result.stdout}"
         if result.stderr.strip():
@@ -162,7 +162,7 @@ class IssueAgent:
         # DON'T add full assistant response to conversation history - only extract command
         next_command = self.extract_command(assistant_message)
         if next_command:
-            self.conversation_history.append({"role": "assistant", "content": f"Command: {next_command}"})
+            self.conversation_history.append({"role": "assistant", "content": f"```bash\n{next_command}\n```"})
 
         # Record full response in trajectory
         if self.trajectory_recorder:
