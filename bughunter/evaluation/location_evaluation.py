@@ -9,6 +9,7 @@ import yaml
 import json
 import logging
 from typing import Dict, Any, List
+from bughunter.config.manager import config_manager
 
 
 def load_gold_truth_data(test_data_file: str) -> Dict[str, Any]:
@@ -275,7 +276,7 @@ def evaluate_locate_bug_results(
 def run_evaluation(args):
     """Run evaluation of locate_bug results with Pass@k metrics"""
     results_file = args.results
-    test_data_file = args.test_data or "data/test_set.yaml"
+    test_data_file = args.test_data or config_manager.get("tasks.test_data_file")
 
     # Check if files exist
     if not os.path.exists(results_file):
@@ -283,7 +284,9 @@ def run_evaluation(args):
         sys.exit(1)
 
     if not os.path.isabs(test_data_file):
-        test_data_file = os.path.join(os.path.dirname(__file__), "..", test_data_file)
+        test_data_file = os.path.join(
+            os.path.dirname(__file__), "..", "..", test_data_file
+        )
 
     if not os.path.exists(test_data_file):
         logging.error(f"Test data file not found: {test_data_file}")
