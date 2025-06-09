@@ -11,6 +11,7 @@ Your task is to:
 4. When you have a solution, provide a patch in the specified format
 
 Guidelines:
+- You start in the default working directory: /home
 - The repository is located under "/home/<repo_name>"
 - Start by exploring the repository structure and understanding the codebase
 - Use the test script located at "/home" to run tests and validate your changes

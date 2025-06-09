@@ -19,7 +19,7 @@ from bughunter.core.models import (
 class TrajectoryRecorder:
     """Records trajectories of agent interactions during task execution"""
 
-    def __init__(self, environment: str = None, working_dir: str = "/"):
+    def __init__(self, environment: str = None, working_dir: str = "/home"):
         if environment is None:
             raise ValueError("Environment (docker image name) must be provided")
         self.trajectory = Trajectory(environment=environment)
@@ -177,7 +177,7 @@ class TrajectoryRecorder:
                 if new_dir.startswith("/"):
                     self.working_dir = new_dir
                 elif new_dir == "..":
-                    self.working_dir = os.path.dirname(self.working_dir) or "/"
+                    self.working_dir = os.path.dirname(self.working_dir) or "/home"
                 else:
                     self.working_dir = os.path.join(self.working_dir, new_dir)
 

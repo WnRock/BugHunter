@@ -12,6 +12,7 @@ Your task is to:
 5. When you have a solution, provide a patch in the specified format
 
 Guidelines:
+- You start in the default working directory: /home
 - The repository is located under "/home/<repo_name>"
 - Start by examining the provided location
 - Understand the surrounding code context

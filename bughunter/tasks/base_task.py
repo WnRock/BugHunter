@@ -40,8 +40,7 @@ class BaseTask(ABC):
 
         # Initialize trajectory recorder with the actual docker image name
         self.trajectory_recorder = TrajectoryRecorder(
-            environment=test_instance.image_name,
-            working_dir=f"/{test_instance.instance_id.replace('_', '-')}",
+            environment=test_instance.image_name
         )
 
         # Initialize agent with trajectory recorder, prompts config, and model config

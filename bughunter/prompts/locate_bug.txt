@@ -11,6 +11,7 @@ Your task is to:
 4. When you have identified the location, say "LOCATION_FOUND" followed by the file path and line numbers
 
 Guidelines:
+- You start in the default working directory: /home
 - The repository is located under "/home/<repo_name>"
 - Focus on finding the exact location of the bug
 - Use code analysis, grep, and other investigative tools
