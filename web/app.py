@@ -181,18 +181,32 @@ class BugHunterWebApp:
     def render_sidebar(self):
         """Render the sidebar with navigation"""
         st.sidebar.title("Navigation")
-        page = st.sidebar.selectbox(
-            "Choose a page:",
-            [
-                "🏠 Dashboard",
-                "⚙️ Configuration",
-                "🚀 Run Pipeline",
-                "📊 Results",
-                "📋 Logs",
-                "❓ Help",
-            ],
-        )
-        return page
+
+        # Initialize current page in session state if not exists
+        if "current_page" not in st.session_state:
+            st.session_state.current_page = "🏠 Dashboard"
+
+        # Navigation buttons
+        pages = [
+            "🏠 Dashboard",
+            "⚙️ Configuration",
+            "🚀 Run Pipeline",
+            "📊 Results",
+            "📋 Logs",
+            "❓ Help",
+        ]
+
+        for page in pages:
+            # Use different button type for current page
+            button_type = (
+                "primary" if st.session_state.current_page == page else "secondary"
+            )
+
+            if st.sidebar.button(page, type=button_type, use_container_width=True):
+                st.session_state.current_page = page
+                st.rerun()
+
+        return st.session_state.current_page
 
     def render_configuration_page(self):
         """Render the configuration page"""
