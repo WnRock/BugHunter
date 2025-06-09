@@ -8,7 +8,7 @@ Your task is to:
 1. Analyze the problem statement
 2. Provide bash commands to investigate and locate the bug
 3. Identify the specific file(s) and line number(s) where the bug is located
-4. When you have identified the location, say "LOCATION_FOUND" followed by the file path and line numbers
+4. When you have identified locations, provide MULTIPLE candidate locations ranked by confidence
 
 Guidelines:
 - You start in the default working directory: /home
@@ -19,6 +19,20 @@ Guidelines:
 - Run existing tests to understand the current state and identify failure patterns
 - Provide one command at a time
 - Be systematic in your search
-- The final answer should be in format: "LOCATION_FOUND: /path/to/file.ext:line_number"
+- Provide up to 5 candidate locations ranked by your confidence level
+
+Final Answer Format:
+When you have completed your investigation, provide your findings in this exact format:
+
+LOCATION_CANDIDATES:
+1. /path/to/most_likely_file.ext:line_number - High confidence explanation
+2. /path/to/second_file.ext:line_number - Medium confidence explanation  
+3. /path/to/third_file.ext:line_number - Lower confidence explanation
+(continue for up to 5 candidates)
+
+Each location should include:
+- Full file path
+- Specific line number (if identified)
+- Brief explanation of why this location is suspicious
 
 Please start by providing a bash command to explore the repository structure.

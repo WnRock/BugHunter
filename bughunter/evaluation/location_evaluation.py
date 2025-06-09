@@ -8,8 +8,7 @@ import sys
 import yaml
 import json
 import logging
-from typing import Dict, Any, Optional
-from bughunter.config.manager import config_manager
+from typing import Dict, Any, List
 
 
 def load_gold_truth_data(test_data_file: str) -> Dict[str, Any]:
@@ -49,52 +48,84 @@ def normalize_path(path: str) -> str:
     return path
 
 
-def extract_file_path_from_llm_output(llm_output: str) -> Optional[str]:
-    """Extract file path from LLM output for locate_bug task"""
-    if not llm_output or not isinstance(llm_output, str):
-        return None
+def extract_location_candidates_from_result(result_data: Dict[str, Any]) -> List[str]:
+    """Extract location candidates from task result data"""
+    candidates = []
 
-    # Look for LOCATION_FOUND pattern first
-    location_pattern = r"LOCATION_FOUND:\s*([^:\s\n]+)"
-    match = re.search(location_pattern, llm_output, re.IGNORECASE)
-    if match:
-        return normalize_path(match.group(1))
+    # Get location candidates from new format
+    if "location_candidates" in result_data:
+        location_candidates = result_data["location_candidates"]
+        if isinstance(location_candidates, list):
+            for candidate in location_candidates:
+                if isinstance(candidate, dict) and "file_path" in candidate:
+                    file_path = candidate["file_path"]
+                    if file_path:
+                        candidates.append(normalize_path(file_path))
 
-    # Look for file paths in common formats
-    file_patterns = [
-        r"(/[\w/\.-]+\.[a-zA-Z]+)",  # Absolute paths like /path/to/file.ext
-        r"([\w/\.-]+\.[a-zA-Z]+)",  # Relative paths like src/file.ext
-    ]
-
-    for pattern in file_patterns:
-        matches = re.findall(pattern, llm_output)
-        if matches:
-            # Return the first reasonable match (filter out very short matches)
-            for match in matches:
-                normalized = normalize_path(match)
-                if len(normalized) > 3 and "." in normalized:  # Basic sanity check
-                    return normalized
-
-    return None
+    return candidates
 
 
-def evaluate_location_correctness(
-    llm_output: str, gold_target_file: Any
+def check_location_match(predicted_path: str, gold_target_file: Any) -> bool:
+    """Check if a predicted path matches the gold target file"""
+    if not predicted_path:
+        return False
+
+    if isinstance(gold_target_file, list):
+        # Check if prediction matches any file in the list
+        for gold_file in gold_target_file:
+            normalized_gold = normalize_path(str(gold_file))
+            if predicted_path == normalized_gold or normalized_gold in predicted_path:
+                return True
+        return False
+
+    elif isinstance(gold_target_file, str):
+        # Check if prediction contains the gold target file
+        normalized_gold = normalize_path(gold_target_file)
+        return normalized_gold in predicted_path or predicted_path == normalized_gold
+
+    return False
+
+
+def calculate_pass_at_k_metrics(
+    location_candidates: List[str],
+    gold_target_file: Any,
+    k_values: List[int] = [1, 2, 3, 5],
+) -> Dict[str, bool]:
+    """Calculate Pass@k metrics for location candidates"""
+    metrics = {}
+
+    for k in k_values:
+        # Consider the top k candidates
+        top_k_candidates = location_candidates[:k]
+
+        # Check if any of the top k candidates match the gold target
+        pass_at_k = any(
+            check_location_match(candidate, gold_target_file)
+            for candidate in top_k_candidates
+        )
+        metrics[f"pass_at_{k}"] = pass_at_k
+
+    return metrics
+
+
+def evaluate_location_candidates(
+    result_data: Dict[str, Any], gold_target_file: Any
 ) -> Dict[str, Any]:
     """
-    Evaluate if LLM's location output matches the gold target file
+    Evaluate location candidates with Pass@k metrics
 
     Args:
-        llm_output: The LLM's output text containing location information
+        result_data: Task result data containing location candidates
         gold_target_file: Ground truth - can be None, string, or list
 
     Returns:
-        Dict with evaluation results
+        Dict with evaluation results including Pass@k metrics
     """
     result = {
-        "correct": False,
-        "llm_prediction": None,
         "gold_target": gold_target_file,
+        "location_candidates": [],
+        "pass_at_k": {},
+        "best_match_rank": None,
         "reason": "",
     }
 
@@ -103,43 +134,31 @@ def evaluate_location_correctness(
         result["reason"] = "No gold target file to compare against"
         return result
 
-    # Extract file path from LLM output
-    llm_file_path = extract_file_path_from_llm_output(llm_output)
-    result["llm_prediction"] = llm_file_path
+    # Extract location candidates
+    location_candidates = extract_location_candidates_from_result(result_data)
+    result["location_candidates"] = location_candidates
 
-    if not llm_file_path:
-        result["reason"] = "Could not extract file path from LLM output"
+    if not location_candidates:
+        result["reason"] = "No location candidates found in result data"
         return result
 
-    # Handle different gold_target_file formats
-    if isinstance(gold_target_file, list):
-        # Check if LLM prediction matches any file in the list
-        for gold_file in gold_target_file:
-            normalized_gold = normalize_path(str(gold_file))
-            if llm_file_path == normalized_gold or normalized_gold in llm_file_path:
-                result["correct"] = True
-                result["reason"] = (
-                    f"LLM prediction matches gold file: {normalized_gold}"
-                )
-                return result
-        result["reason"] = (
-            f"LLM prediction '{llm_file_path}' not found in gold list: {gold_target_file}"
-        )
+    # Calculate Pass@k metrics
+    pass_at_k_metrics = calculate_pass_at_k_metrics(
+        location_candidates, gold_target_file
+    )
+    result["pass_at_k"] = pass_at_k_metrics
 
-    elif isinstance(gold_target_file, str):
-        # Check if LLM prediction contains the gold target file
-        normalized_gold = normalize_path(gold_target_file)
-        if normalized_gold in llm_file_path or llm_file_path == normalized_gold:
-            result["correct"] = True
-            result["reason"] = f"LLM prediction contains gold file: {normalized_gold}"
-        else:
-            result["reason"] = (
-                f"LLM prediction '{llm_file_path}' does not contain gold file: {normalized_gold}"
-            )
+    # Find the rank of the best match
+    for i, candidate in enumerate(location_candidates):
+        if check_location_match(candidate, gold_target_file):
+            result["best_match_rank"] = i + 1  # 1-indexed rank
+            break
 
+    if result["best_match_rank"] is not None:
+        result["reason"] = f"Correct location found at rank {result['best_match_rank']}"
     else:
         result["reason"] = (
-            f"Unsupported gold_target_file type: {type(gold_target_file)}"
+            f"No correct location found in {len(location_candidates)} candidates"
         )
 
     return result
@@ -149,7 +168,7 @@ def evaluate_locate_bug_results(
     results_file: str, test_data_file: str
 ) -> Dict[str, Any]:
     """
-    Evaluate locate_bug results against gold truth data
+    Evaluate locate_bug results against gold truth data with Pass@k metrics
 
     Args:
         results_file: Path to results.json file with LLM outputs
@@ -168,11 +187,17 @@ def evaluate_locate_bug_results(
         "total_instances": 0,
         "evaluated_instances": 0,
         "skipped_instances": 0,
-        "correct_predictions": 0,
-        "incorrect_predictions": 0,
-        "accuracy": 0.0,
+        "pass_at_k_summary": {
+            "pass_at_1": {"correct": 0, "total": 0},
+            "pass_at_2": {"correct": 0, "total": 0},
+            "pass_at_3": {"correct": 0, "total": 0},
+            "pass_at_5": {"correct": 0, "total": 0},
+        },
+        "average_best_rank": 0.0,
         "detailed_results": [],
     }
+
+    best_ranks = []
 
     for result in results:
         instance_id = result["instance_id"]
@@ -201,50 +226,54 @@ def evaluate_locate_bug_results(
 
         evaluation_results["evaluated_instances"] += 1
 
-        # Extract LLM output
-        llm_output = ""
-        if result.get("success") and result.get("result_data"):
-            # Try to get the full response from location task
-            if "full_response" in result["result_data"]:
-                llm_output = result["result_data"]["full_response"]
-            elif "location" in result["result_data"]:
-                # Fallback to location data
-                location_data = result["result_data"]["location"]
-                if isinstance(location_data, dict) and "file_path" in location_data:
-                    llm_output = location_data["file_path"] or ""
+        # Extract result data
+        result_data = result.get("result_data", {})
 
-        # Evaluate correctness
-        eval_result = evaluate_location_correctness(llm_output, gold_target_file)
+        # Evaluate with Pass@k metrics
+        eval_result = evaluate_location_candidates(result_data, gold_target_file)
 
-        # Update statistics
-        if eval_result["correct"]:
-            evaluation_results["correct_predictions"] += 1
-        else:
-            evaluation_results["incorrect_predictions"] += 1
+        # Update Pass@k statistics
+        for k in [1, 2, 3, 5]:
+            metric_key = f"pass_at_{k}"
+            if metric_key in eval_result["pass_at_k"]:
+                evaluation_results["pass_at_k_summary"][metric_key]["total"] += 1
+                if eval_result["pass_at_k"][metric_key]:
+                    evaluation_results["pass_at_k_summary"][metric_key]["correct"] += 1
+
+        # Track best ranks for average calculation
+        if eval_result["best_match_rank"] is not None:
+            best_ranks.append(eval_result["best_match_rank"])
 
         # Store detailed result
         detailed_result = {
             "instance_id": instance_id,
-            "correct": eval_result["correct"],
-            "llm_prediction": eval_result["llm_prediction"],
+            "location_candidates": eval_result["location_candidates"],
+            "pass_at_k": eval_result["pass_at_k"],
+            "best_match_rank": eval_result["best_match_rank"],
             "gold_target": eval_result["gold_target"],
             "reason": eval_result["reason"],
             "llm_success": result.get("success", False),
         }
         evaluation_results["detailed_results"].append(detailed_result)
 
-    # Calculate accuracy
-    if evaluation_results["evaluated_instances"] > 0:
-        evaluation_results["accuracy"] = (
-            evaluation_results["correct_predictions"]
-            / evaluation_results["evaluated_instances"]
-        )
+    # Calculate Pass@k percentages
+    for k in [1, 2, 3, 5]:
+        metric_key = f"pass_at_{k}"
+        summary = evaluation_results["pass_at_k_summary"][metric_key]
+        if summary["total"] > 0:
+            summary["percentage"] = summary["correct"] / summary["total"]
+        else:
+            summary["percentage"] = 0.0
+
+    # Calculate average best rank
+    if best_ranks:
+        evaluation_results["average_best_rank"] = sum(best_ranks) / len(best_ranks)
 
     return evaluation_results
 
 
 def run_evaluation(args):
-    """Run evaluation of locate_bug results"""
+    """Run evaluation of locate_bug results with Pass@k metrics"""
     results_file = args.results
     test_data_file = args.test_data or "data/test_set.yaml"
 
@@ -269,16 +298,27 @@ def run_evaluation(args):
 
         # Print summary
         print("\n" + "=" * 60)
-        print("LOCATE BUG EVALUATION RESULTS")
+        print("LOCATE BUG EVALUATION RESULTS WITH PASS@K METRICS")
         print("=" * 60)
         print(f"Total locate_bug instances: {evaluation_results['total_instances']}")
         print(f"Evaluated instances: {evaluation_results['evaluated_instances']}")
         print(
             f"Skipped instances (no gold target): {evaluation_results['skipped_instances']}"
         )
-        print(f"Correct predictions: {evaluation_results['correct_predictions']}")
-        print(f"Incorrect predictions: {evaluation_results['incorrect_predictions']}")
-        print(f"Accuracy: {evaluation_results['accuracy']:.2%}")
+        print()
+        print("Pass@k Metrics:")
+        for k in [1, 2, 3, 5]:
+            metric_key = f"pass_at_{k}"
+            summary = evaluation_results["pass_at_k_summary"][metric_key]
+            percentage = summary.get("percentage", 0.0)
+            print(
+                f"  Pass@{k}: {summary['correct']}/{summary['total']} ({percentage:.2%})"
+            )
+
+        if evaluation_results["average_best_rank"] > 0:
+            print(
+                f"\nAverage rank of correct location: {evaluation_results['average_best_rank']:.2f}"
+            )
         print("=" * 60)
 
         # Print detailed results if requested
@@ -289,11 +329,20 @@ def run_evaluation(args):
                 if detail.get("skipped"):
                     print(f"SKIPPED: {detail['instance_id']} - {detail['reason']}")
                 else:
-                    status = "✓ CORRECT" if detail["correct"] else "✗ INCORRECT"
-                    print(f"{status}: {detail['instance_id']}")
-                    print(f"  LLM Prediction: {detail['llm_prediction']}")
+                    pass_at_1 = (
+                        "✓" if detail["pass_at_k"].get("pass_at_1", False) else "✗"
+                    )
+                    rank_info = (
+                        f" (rank {detail['best_match_rank']})"
+                        if detail["best_match_rank"]
+                        else " (not found)"
+                    )
+                    print(f"{pass_at_1} {detail['instance_id']}{rank_info}")
+                    print(f"  Candidates: {len(detail['location_candidates'])}")
+                    print(f"  Pass@1: {detail['pass_at_k'].get('pass_at_1', False)}")
+                    print(f"  Pass@3: {detail['pass_at_k'].get('pass_at_3', False)}")
+                    print(f"  Pass@5: {detail['pass_at_k'].get('pass_at_5', False)}")
                     print(f"  Gold Target: {detail['gold_target']}")
-                    print(f"  Reason: {detail['reason']}")
                     print(f"  LLM Success: {detail['llm_success']}")
                     print("-" * 40)
 
